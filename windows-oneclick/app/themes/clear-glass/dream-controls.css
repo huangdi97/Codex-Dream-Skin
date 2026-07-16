@@ -1,0 +1,34 @@
+:root.codex-dream-skin {
+  --dream-panel-rgb: 246, 252, 255;
+  --dream-soft-rgb: 235, 249, 255;
+  --dream-line: rgba(var(--dream-secondary-rgb), .28);
+}
+
+html.codex-dream-skin aside.app-shell-left-panel {
+  border-radius: 0 14px 14px 0 !important;
+  background: rgba(250, 254, 255, .48) !important;
+  border-color: rgba(var(--dream-secondary-rgb), .24) !important;
+  box-shadow: 8px 0 26px rgba(var(--dream-ink-rgb), .08), inset -1px 0 rgba(255,255,255,.86) !important;
+}
+
+html.codex-dream-skin main.main-surface {
+  border-radius: 14px 0 0 0 !important;
+  background: rgba(250, 254, 255, .34) !important;
+  border-color: rgba(var(--dream-secondary-rgb), .24) !important;
+}
+
+.dream-home .group\/home-suggestions button,
+html.codex-dream-skin .composer-surface-chrome,
+.dream-home .group\/project-selector > button {
+  border-radius: 14px !important;
+  background: rgba(255, 255, 255, .72) !important;
+  border-color: rgba(var(--dream-secondary-rgb), .30) !important;
+  box-shadow: 0 8px 22px rgba(var(--dream-ink-rgb), .08), inset 0 0 0 1px rgba(255,255,255,.62) !important;
+}
+
+.dream-polaroid,
+.dream-ribbon,
+.dream-signature {
+  display: none !important;
+}
+

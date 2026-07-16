@@ -1,0 +1,20 @@
+Codex Dream Skin One Click Package
+
+This package wraps the open-source Windows scripts from:
+https://github.com/Fei-Away/Codex-Dream-Skin
+
+The upstream project is distributed under the MIT License. Keep the upstream
+license and copyright notices when you redistribute this package.
+
+This package is not an OpenAI official product. Codex and related trademarks
+belong to their respective owners.
+
+Security and privacy boundary:
+- It does not provide Codex accounts.
+- It must not ask for OpenAI passwords or API keys.
+- It does not modify the official Codex installation package.
+- It uses a local loopback CDP session for visual theme injection.
+
+Commercial note:
+If you include character, celebrity, brand, or IP-based theme images, confirm
+that you have the right to use and redistribute those images.

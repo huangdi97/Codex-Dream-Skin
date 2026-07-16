@@ -1,0 +1,42 @@
+﻿Codex Dream Skin 闲鱼交付 SOP
+
+售前确认：
+1. 买家使用 Windows 还是 macOS。本安装包当前只做 Windows。
+2. 买家是否已经安装 Codex 桌面端。
+3. Codex 是否能正常打开并登录。
+4. 买家是否已经安装 Node.js 22+。
+5. 买家要默认主题，还是提供自己的图片。
+
+远程安装边界：
+- 账号登录、系统密码、OpenAI 登录、API Key 都让买家本人操作。
+- 不接触、不索要、不保存任何账号密码或密钥。
+- 如需远程控制，操作前先说明每一步会做什么。
+
+交付流程：
+1. 发送 CodexDreamSkin-OneClick-Windows.zip。
+2. 让买家完整解压。
+3. 双击 Start-CodexDreamSkin-GUI.vbs。
+4. 点击“安装 / 修复”。
+5. 点击“启动皮肤版 Codex”。
+6. 如果 Codex 已打开，点击“重启并启动”，买家确认重启。
+7. 点击“验证并截图”保存截图。
+8. 教买家使用“恢复官方外观”。
+9. 如果 GUI 无法打开，再使用 Start-CodexDreamSkin.cmd 备用入口。
+
+主题定制流程：
+1. 基础换图单：让买家提供 PNG/JPG，使用“换自己的图片”。
+2. 控件风格单：使用“主题包 / 控件风格”，选择内置 Default Dream / Clear Glass / Stage Gold / Red Gold。
+3. 专属定制单：给买家建立一个主题文件夹，至少包含 theme.json 和 dream-controls.css；如需全套效果，再加入 dream-reference.png、dream-background.png、dream-palette.css。
+4. 主题文件夹格式见 docs/theme-packages.txt。
+
+售后话术：
+- Codex 更新后皮肤消失：重新运行 1 安装 / 修复，然后运行 2。
+- 启动失败：关闭 Codex，运行 7 恢复，再运行 1 和 3。
+- 想换图：点击“换自己的图片”，选择 PNG/JPG 图片。
+- 想换控件风格：点击“主题包 / 控件风格”，选择一个预设或卖家发的主题文件夹。
+- 不想用了：点击“恢复官方外观”，再点击“卸载快捷方式”。
+
+商品说明建议：
+Codex 桌面端第三方主题美化安装包，图形界面一键安装、一键启动、自定义图片、一键恢复官方外观。非 OpenAI 官方产品，不提供账号，不索要密码或 API Key，不修改官方安装包。
+
+

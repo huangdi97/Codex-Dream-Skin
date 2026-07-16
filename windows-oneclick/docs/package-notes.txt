@@ -1,0 +1,72 @@
+Package notes
+
+Package name:
+CodexDreamSkin-OneClick-Windows
+
+Upstream:
+https://github.com/Fei-Away/Codex-Dream-Skin
+
+Upstream commit used while packaging:
+d80a3bc
+
+What this package adds:
+- Start-CodexDreamSkin-GUI.vbs: no-console double-click GUI launcher.
+- Start-CodexDreamSkin.cmd: fallback console menu if the GUI cannot open.
+- app/skin-manager-gui.ps1: Windows Forms GUI wrapper for buyer-friendly use.
+- app/skin-manager.ps1: menu wrapper for install, start, verify, image swap,
+  restore, uninstall, and log access.
+- app/windows/assets/dream-reference.png: neutral no-celebrity, no-brand default
+  home theme image generated for buyer-safe demos.
+- app/windows/assets/dream-background.png: neutral abstract global background
+  without text, matched to the home theme image palette.
+- README.txt: buyer-facing usage instructions.
+- docs/seller-sop.txt: seller-facing delivery workflow.
+- NOTICE.txt and LICENSE.txt: source, license, and safety boundary notes.
+- Upstream development-only skill and reference files are omitted from the
+  buyer package.
+
+Compatibility changes applied to the packaged Windows copy:
+- app/skin-manager-gui.ps1 uses ProcessStartInfo.Arguments instead of
+  ProcessStartInfo.ArgumentList so it works on Windows PowerShell 5.1.
+- app/skin-manager-gui.ps1 handles restart confirmation in the GUI instead of
+  showing the upstream WScript popup.
+- app/skin-manager-gui.ps1 prompts to close a running Codex before install /
+  repair, avoiding the upstream config lock failure message.
+- app/windows/assets/dream-skin.css applies the selected image as a global
+  background, not only on the home screen hero.
+- app/windows/assets/dream-skin.css now uses one continuous global background
+  behind both the sidebar and main surface; those panels are translucent.
+- app/skin-manager-gui.ps1 can apply a chosen image to all areas, home only,
+  or non-home global backgrounds only.
+- app/skin-manager-gui.ps1 can apply a theme package that changes control
+  styling through app/windows/assets/dream-controls.css.
+- app/themes contains built-in control presets: Default Dream, Clear Glass,
+  Stage Gold, and Red Gold.
+- docs/theme-packages.txt documents the custom theme folder format for seller
+  customization work.
+- Start-CodexDreamSkin-GUI.vbs exits explicitly after launching the GUI to
+  avoid a stuck Windows Script Host process.
+- Start-CodexDreamSkin-GUI.vbs launches PowerShell in STA mode.
+- app/skin-manager-gui.ps1 launches install/start/restore scripts as detached
+  hidden background processes and writes action logs, avoiding GUI hangs from
+  process output pipes or WinForms timers.
+- app/skin-manager-gui.ps1 writes GUI-level failures to outputs/gui-crash.log
+  and catches button-handler exceptions instead of letting PowerShell exit.
+- app/windows/scripts/config-utf8.ps1 avoids File.Replace(..., $null), which
+  can fail on Windows PowerShell in some environments.
+- app/windows/scripts/config-utf8.ps1 trims an extra trailing blank line when
+  restoring quoted [desktop] TOML sections.
+- app/windows/scripts/config-utf8.ps1 adds direct line-by-line detection for
+  multiline TOML arrays before line-level editing.
+
+Validation:
+- skin-manager-gui.ps1 PowerShell parser check passed.
+- skin-manager.ps1 PowerShell parser check passed.
+- app/windows/tests/run-tests.ps1 passed.
+
+Limitations:
+- This is a Windows MVP package, not a signed .exe installer.
+- Windows SmartScreen or antivirus software may still warn users about scripts
+  from the internet.
+- Node.js 22+ is still required by the upstream injector.
+- macOS packaging is not included in this zip.

@@ -1,0 +1,32 @@
+Codex Dream Skin theme package format
+
+A theme package is one folder. It can be a built-in folder under:
+
+  app\themes\<theme-id>\
+
+or a custom folder selected from the GUI.
+
+Supported files:
+
+  theme.json              Optional manifest.
+  dream-controls.css      Optional control style overrides.
+  dream-reference.png     Optional home image.
+  dream-background.png    Optional global background image.
+  dream-palette.css       Optional color variables.
+
+Recommended theme.json:
+
+{
+  "name": "Customer Theme Name",
+  "controls": "dream-controls.css",
+  "homeImage": "dream-reference.png",
+  "backgroundImage": "dream-background.png",
+  "palette": "dream-palette.css"
+}
+
+Only include the files that the theme needs to change. For example, a style
+preset can include only theme.json and dream-controls.css. A full customer
+theme can include all five files.
+
+After applying a theme package, restart Dream Skin Codex from the manager.
+

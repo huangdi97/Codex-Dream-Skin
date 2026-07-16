@@ -1,0 +1,52 @@
+:root.codex-dream-skin {
+  color-scheme: dark !important;
+  --dream-ink: #f7e6b1;
+  --dream-primary: #d9a441;
+  --dream-secondary: #6f5cff;
+  --dream-accent: #ffcc66;
+  --dream-primary-rgb: 217, 164, 65;
+  --dream-secondary-rgb: 111, 92, 255;
+  --dream-accent-rgb: 255, 204, 102;
+  --dream-ink-rgb: 247, 230, 177;
+  --dream-panel-rgb: 24, 22, 32;
+  --dream-soft-rgb: 45, 38, 54;
+  --dream-line: rgba(255, 204, 102, .42);
+}
+
+html.codex-dream-skin body {
+  color: var(--dream-ink) !important;
+  background:
+    linear-gradient(135deg, rgba(7,7,12,.68), rgba(22,17,29,.58)),
+    var(--dream-art-global),
+    #09090f !important;
+}
+
+html.codex-dream-skin aside.app-shell-left-panel,
+html.codex-dream-skin main.main-surface,
+html.codex-dream-skin main.main-surface > header.app-header-tint {
+  background: rgba(12, 11, 18, .62) !important;
+  border-color: rgba(255, 204, 102, .32) !important;
+  box-shadow: 0 0 28px rgba(217,164,65,.10), inset 0 1px rgba(255,255,255,.12) !important;
+}
+
+.dream-home > div:first-child > div:first-child > div:first-child::before {
+  background: linear-gradient(90deg, rgba(4,4,8,.92), rgba(63,43,21,.74), transparent) !important;
+}
+
+.dream-home .group\/home-suggestions button,
+html.codex-dream-skin .composer-surface-chrome,
+.dream-home .group\/project-selector > button {
+  border-radius: 10px !important;
+  color: var(--dream-ink) !important;
+  background: linear-gradient(145deg, rgba(21,19,28,.88), rgba(42,34,45,.80)) !important;
+  border-color: rgba(255,204,102,.40) !important;
+  box-shadow: 0 10px 24px rgba(0,0,0,.26), inset 0 0 0 1px rgba(255,255,255,.08) !important;
+}
+
+.dream-home .group\/home-suggestions button > span:first-child > span:first-child,
+html.codex-dream-skin button[class~="bg-token-foreground"],
+html.codex-dream-skin .composer-surface-chrome::before {
+  background: linear-gradient(145deg, #ffdb82, #b77818) !important;
+  color: #221407 !important;
+}
+
