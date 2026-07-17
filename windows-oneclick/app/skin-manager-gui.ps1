@@ -236,62 +236,158 @@ function Show-ThemeImagePreview {
   return $script:ThemePreviewConfirmed
 }
 
-function Show-ThemeNameDialog {
+function Show-ThemeOptionsDialog {
   $dialog = New-Object System.Windows.Forms.Form
   $dialog.Text = '制作主题'
   $dialog.StartPosition = 'CenterParent'
-  $dialog.ClientSize = New-Object System.Drawing.Size(420, 150)
+  $dialog.ClientSize = New-Object System.Drawing.Size(460, 330)
   $dialog.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
   $dialog.MaximizeBox = $false
   $dialog.MinimizeBox = $false
   $dialog.Font = New-Object System.Drawing.Font('Microsoft YaHei UI', 9)
 
-  $label = New-Object System.Windows.Forms.Label
-  $label.Text = '输入主题名称'
-  $label.Location = New-Object System.Drawing.Point(18, 18)
-  $label.Size = New-Object System.Drawing.Size(360, 24)
-  $dialog.Controls.Add($label)
+  $nameLabel = New-Object System.Windows.Forms.Label
+  $nameLabel.Text = '主题名称'
+  $nameLabel.Location = New-Object System.Drawing.Point(18, 18)
+  $nameLabel.Size = New-Object System.Drawing.Size(110, 24)
+  $dialog.Controls.Add($nameLabel)
 
   $textBox = New-Object System.Windows.Forms.TextBox
-  $textBox.Location = New-Object System.Drawing.Point(18, 48)
-  $textBox.Size = New-Object System.Drawing.Size(382, 24)
+  $textBox.Location = New-Object System.Drawing.Point(140, 16)
+  $textBox.Size = New-Object System.Drawing.Size(292, 24)
   $textBox.Text = '我的 Dream Skin 主题'
   $dialog.Controls.Add($textBox)
 
+  $styleLabel = New-Object System.Windows.Forms.Label
+  $styleLabel.Text = '控件配色'
+  $styleLabel.Location = New-Object System.Drawing.Point(18, 58)
+  $styleLabel.Size = New-Object System.Drawing.Size(110, 24)
+  $dialog.Controls.Add($styleLabel)
+
+  $styleBox = New-Object System.Windows.Forms.ComboBox
+  $styleBox.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDownList
+  $styleBox.Location = New-Object System.Drawing.Point(140, 56)
+  $styleBox.Size = New-Object System.Drawing.Size(292, 24)
+  $styleOptions = @(
+    [pscustomobject]@{ Label = '自动从图片取色'; Accent = $null },
+    [pscustomobject]@{ Label = '玫瑰粉'; Accent = '#d86b8d' },
+    [pscustomobject]@{ Label = '清爽蓝'; Accent = '#4f8cff' },
+    [pscustomobject]@{ Label = '梦幻紫'; Accent = '#8b5cf6' },
+    [pscustomobject]@{ Label = '高级金'; Accent = '#c8922e' },
+    [pscustomobject]@{ Label = '热烈红'; Accent = '#e5484d' }
+  )
+  $styleBox.DisplayMember = 'Label'
+  foreach ($option in $styleOptions) { [void]$styleBox.Items.Add($option) }
+  $styleBox.SelectedIndex = 0
+  $dialog.Controls.Add($styleBox)
+
+  $appearanceLabel = New-Object System.Windows.Forms.Label
+  $appearanceLabel.Text = '明暗模式'
+  $appearanceLabel.Location = New-Object System.Drawing.Point(18, 98)
+  $appearanceLabel.Size = New-Object System.Drawing.Size(110, 24)
+  $dialog.Controls.Add($appearanceLabel)
+
+  $appearanceBox = New-Object System.Windows.Forms.ComboBox
+  $appearanceBox.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDownList
+  $appearanceBox.Location = New-Object System.Drawing.Point(140, 96)
+  $appearanceBox.Size = New-Object System.Drawing.Size(292, 24)
+  foreach ($option in @(
+    [pscustomobject]@{ Label = '跟随 Codex / 系统'; Value = 'auto' },
+    [pscustomobject]@{ Label = '浅色控件'; Value = 'light' },
+    [pscustomobject]@{ Label = '深色控件'; Value = 'dark' }
+  )) { [void]$appearanceBox.Items.Add($option) }
+  $appearanceBox.DisplayMember = 'Label'
+  $appearanceBox.SelectedIndex = 0
+  $dialog.Controls.Add($appearanceBox)
+
+  $safeLabel = New-Object System.Windows.Forms.Label
+  $safeLabel.Text = '首页文字遮罩'
+  $safeLabel.Location = New-Object System.Drawing.Point(18, 138)
+  $safeLabel.Size = New-Object System.Drawing.Size(110, 24)
+  $dialog.Controls.Add($safeLabel)
+
+  $safeBox = New-Object System.Windows.Forms.ComboBox
+  $safeBox.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDownList
+  $safeBox.Location = New-Object System.Drawing.Point(140, 136)
+  $safeBox.Size = New-Object System.Drawing.Size(292, 24)
+  foreach ($option in @(
+    [pscustomobject]@{ Label = '智能判断'; Value = 'auto' },
+    [pscustomobject]@{ Label = '左侧遮罩'; Value = 'left' },
+    [pscustomobject]@{ Label = '右侧遮罩'; Value = 'right' },
+    [pscustomobject]@{ Label = '居中遮罩'; Value = 'center' },
+    [pscustomobject]@{ Label = '不加遮罩'; Value = 'none' }
+  )) { [void]$safeBox.Items.Add($option) }
+  $safeBox.DisplayMember = 'Label'
+  $safeBox.SelectedIndex = 0
+  $dialog.Controls.Add($safeBox)
+
+  $taskLabel = New-Object System.Windows.Forms.Label
+  $taskLabel.Text = '任务页面遮罩'
+  $taskLabel.Location = New-Object System.Drawing.Point(18, 178)
+  $taskLabel.Size = New-Object System.Drawing.Size(110, 24)
+  $dialog.Controls.Add($taskLabel)
+
+  $taskBox = New-Object System.Windows.Forms.ComboBox
+  $taskBox.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDownList
+  $taskBox.Location = New-Object System.Drawing.Point(140, 176)
+  $taskBox.Size = New-Object System.Drawing.Size(292, 24)
+  foreach ($option in @(
+    [pscustomobject]@{ Label = '智能遮罩'; Value = 'auto' },
+    [pscustomobject]@{ Label = '柔和背景遮罩'; Value = 'ambient' },
+    [pscustomobject]@{ Label = '顶部横幅遮罩'; Value = 'banner' },
+    [pscustomobject]@{ Label = '不显示背景图'; Value = 'off' }
+  )) { [void]$taskBox.Items.Add($option) }
+  $taskBox.DisplayMember = 'Label'
+  $taskBox.SelectedIndex = 0
+  $dialog.Controls.Add($taskBox)
+
+  $note = New-Object System.Windows.Forms.Label
+  $note.Text = '提示：控件配色会影响按钮、输入框、侧边栏等；任务页面遮罩控制聊天/任务页面是否显示背景图。'
+  $note.Location = New-Object System.Drawing.Point(18, 220)
+  $note.Size = New-Object System.Drawing.Size(414, 42)
+  $dialog.Controls.Add($note)
+
   $ok = New-Object System.Windows.Forms.Button
   $ok.Text = '下一步'
-  $ok.Location = New-Object System.Drawing.Point(238, 96)
+  $ok.Location = New-Object System.Drawing.Point(270, 278)
   $ok.Size = New-Object System.Drawing.Size(78, 32)
   $dialog.AcceptButton = $ok
   $dialog.Controls.Add($ok)
 
   $cancel = New-Object System.Windows.Forms.Button
   $cancel.Text = '取消'
-  $cancel.Location = New-Object System.Drawing.Point(322, 96)
+  $cancel.Location = New-Object System.Drawing.Point(354, 278)
   $cancel.Size = New-Object System.Drawing.Size(78, 32)
   $dialog.CancelButton = $cancel
   $dialog.Controls.Add($cancel)
 
-  $script:ThemeNameDialogValue = $null
+  $script:ThemeOptionsDialogValue = $null
   $ok.Add_Click({
     $value = $textBox.Text.Trim()
     if ([string]::IsNullOrWhiteSpace($value)) {
       [void][System.Windows.Forms.MessageBox]::Show('主题名称不能为空。', '制作主题')
       return
     }
-    $script:ThemeNameDialogValue = $value
+    $script:ThemeOptionsDialogValue = [pscustomobject]@{
+      Name = $value
+      Accent = $styleBox.SelectedItem.Accent
+      Appearance = $appearanceBox.SelectedItem.Value
+      SafeArea = $safeBox.SelectedItem.Value
+      TaskMode = $taskBox.SelectedItem.Value
+    }
     $dialog.Close()
   })
   $cancel.Add_Click({ $dialog.Close() })
 
   [void]$dialog.ShowDialog($form)
   $dialog.Dispose()
-  return $script:ThemeNameDialogValue
+  return $script:ThemeOptionsDialogValue
 }
 
 function New-OneClickTheme {
-  $name = Show-ThemeNameDialog
-  if (-not $name) { return $Text.cancelled }
+  $options = Show-ThemeOptionsDialog
+  if (-not $options) { return $Text.cancelled }
+  $name = $options.Name
 
   $dialog = New-Object System.Windows.Forms.OpenFileDialog
   $dialog.Title = '选择主题图片'
@@ -314,18 +410,22 @@ function New-OneClickTheme {
   $imagePath = Join-Path $themeDir $imageName
   Save-ThemeImage -SourcePath $dialog.FileName -DestinationPath $imagePath
 
-  $accent = Get-ImageAccentHex -ImagePath $imagePath
+  $accent = if ($options.Accent) { $options.Accent } else { Get-ImageAccentHex -ImagePath $imagePath }
   $theme = [ordered]@{
     schemaVersion = 1
     id = $themeId
     name = $name
     image = $imageName
-    appearance = 'auto'
+    appearance = $options.Appearance
+    brandSubtitle = 'CODEX DREAM SKIN'
+    tagline = "$name 已就绪。"
+    statusText = 'CUSTOM THEME ONLINE'
+    quote = 'MAKE SOMETHING WONDERFUL'
     art = [ordered]@{
       focusX = 0.5
       focusY = 0.42
-      safeArea = 'auto'
-      taskMode = 'auto'
+      safeArea = $options.SafeArea
+      taskMode = $options.TaskMode
     }
     palette = [ordered]@{
       accent = $accent

@@ -196,6 +196,27 @@ function Invoke-StartAfterThemeChange {
   & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $StartScript @((Get-PortArguments) + @('-RestartExisting'))
 }
 
+function Read-ThemeChoice {
+  param(
+    [Parameter(Mandatory = $true)][string]$Title,
+    [Parameter(Mandatory = $true)][object[]]$Options,
+    [int]$DefaultIndex = 1
+  )
+  Write-Host ''
+  Write-Host $Title -ForegroundColor Cyan
+  for ($index = 0; $index -lt $Options.Count; $index++) {
+    Write-Host ("  {0}. {1}" -f ($index + 1), $Options[$index].Label)
+  }
+  $raw = (Read-Host "Choose [$DefaultIndex]").Trim()
+  if (-not $raw) { return $Options[$DefaultIndex - 1] }
+  if ($raw -match '^\d+$') {
+    $number = [int]$raw
+    if ($number -ge 1 -and $number -le $Options.Count) { return $Options[$number - 1] }
+  }
+  Write-Host 'Using default.' -ForegroundColor Yellow
+  return $Options[$DefaultIndex - 1]
+}
+
 function New-OneClickTheme {
   $name = (Read-Host 'Theme name').Trim()
   if (-not $name) {
@@ -213,6 +234,33 @@ function New-OneClickTheme {
     throw "Image file not found: $inputPath"
   }
 
+  $style = Read-ThemeChoice -Title 'Control color style' -Options @(
+    [pscustomobject]@{ Label = 'Auto from image'; Accent = $null },
+    [pscustomobject]@{ Label = 'Rose pink'; Accent = '#d86b8d' },
+    [pscustomobject]@{ Label = 'Fresh blue'; Accent = '#4f8cff' },
+    [pscustomobject]@{ Label = 'Dream purple'; Accent = '#8b5cf6' },
+    [pscustomobject]@{ Label = 'Premium gold'; Accent = '#c8922e' },
+    [pscustomobject]@{ Label = 'Warm red'; Accent = '#e5484d' }
+  )
+  $appearance = Read-ThemeChoice -Title 'Appearance' -Options @(
+    [pscustomobject]@{ Label = 'Auto'; Value = 'auto' },
+    [pscustomobject]@{ Label = 'Light controls'; Value = 'light' },
+    [pscustomobject]@{ Label = 'Dark controls'; Value = 'dark' }
+  )
+  $safeArea = Read-ThemeChoice -Title 'Home text mask' -Options @(
+    [pscustomobject]@{ Label = 'Auto'; Value = 'auto' },
+    [pscustomobject]@{ Label = 'Left mask'; Value = 'left' },
+    [pscustomobject]@{ Label = 'Right mask'; Value = 'right' },
+    [pscustomobject]@{ Label = 'Center mask'; Value = 'center' },
+    [pscustomobject]@{ Label = 'No mask'; Value = 'none' }
+  )
+  $taskMode = Read-ThemeChoice -Title 'Task page mask' -Options @(
+    [pscustomobject]@{ Label = 'Auto'; Value = 'auto' },
+    [pscustomobject]@{ Label = 'Soft background mask'; Value = 'ambient' },
+    [pscustomobject]@{ Label = 'Top banner mask'; Value = 'banner' },
+    [pscustomobject]@{ Label = 'Hide background image'; Value = 'off' }
+  )
+
   $paths = Initialize-OneClickThemeStore
   Assert-DreamSkinImageFile -Path $inputPath
   $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
@@ -225,14 +273,18 @@ function New-OneClickTheme {
   $imageName = 'art.jpg'
   $imagePath = Join-Path $themeDir $imageName
   Save-ThemeImage -SourcePath $inputPath -DestinationPath $imagePath
-  $accent = Get-ImageAccentHex -ImagePath $imagePath
+  $accent = if ($style.Accent) { $style.Accent } else { Get-ImageAccentHex -ImagePath $imagePath }
   $theme = [ordered]@{
     schemaVersion = 1
     id = $themeId
     name = $name
     image = $imageName
-    appearance = 'auto'
-    art = [ordered]@{ focusX = 0.5; focusY = 0.42; safeArea = 'auto'; taskMode = 'auto' }
+    appearance = $appearance.Value
+    brandSubtitle = 'CODEX DREAM SKIN'
+    tagline = "$name is ready."
+    statusText = 'CUSTOM THEME ONLINE'
+    quote = 'MAKE SOMETHING WONDERFUL'
+    art = [ordered]@{ focusX = 0.5; focusY = 0.42; safeArea = $safeArea.Value; taskMode = $taskMode.Value }
     palette = [ordered]@{ accent = $accent }
   }
   Write-DreamSkinTheme -ThemeDirectory $themeDir -Theme ([pscustomobject]$theme)
