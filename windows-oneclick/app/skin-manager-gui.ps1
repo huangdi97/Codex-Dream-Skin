@@ -4,6 +4,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$PortExplicit = $PSBoundParameters.ContainsKey('Port')
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -187,6 +188,11 @@ function Assert-PackageReady {
   foreach ($path in @($InstallScript, $StartScript, $RestoreScript, $VerifyScript, $ThemeScript)) {
     if (-not (Test-Path -LiteralPath $path)) { throw ($Text.missingFile + $path) }
   }
+}
+
+function Get-PortArguments {
+  if ($PortExplicit) { return @('-Port', "$Port") }
+  return @()
 }
 
 function Set-UiBusy {
@@ -376,9 +382,9 @@ function Install-Skin {
   if (-not (Close-CodexForInstall)) { return $Text.cancelled }
   try {
     Set-UiBusy -Busy $true -Body $Text.busyInstall
-    $installOutput = Invoke-ScriptProcess -ScriptPath $InstallScript -Arguments @('-Port', "$Port") -TimeoutSeconds 90
+    $installOutput = Invoke-ScriptProcess -ScriptPath $InstallScript -Arguments (Get-PortArguments) -TimeoutSeconds 90
     Set-UiBusy -Busy $true -Body $Text.busyStart
-    $startOutput = Invoke-ScriptProcess -ScriptPath $StartScript -Arguments @('-Port', "$Port", '-RestartExisting') -TimeoutSeconds 120
+    $startOutput = Invoke-ScriptProcess -ScriptPath $StartScript -Arguments ((Get-PortArguments) + @('-RestartExisting')) -TimeoutSeconds 120
     Set-UiBusy -Busy $false -Body $Text.doneStart
     $details = (($installOutput, $startOutput) | Where-Object { $_ }) -join "`r`n`r`n"
     $body = "安装 / 修复完成，皮肤版 Codex 已启动。"
@@ -394,13 +400,13 @@ function Install-Skin {
 function Start-Skin {
   if (-not (Confirm-Action $Text.startConfirm)) { return $Text.cancelled }
   Start-ScriptProcess -BusyText $Text.busyStart -DoneText $Text.doneStart `
-    -ScriptPath $StartScript -Arguments @('-Port', "$Port", '-RestartExisting')
+    -ScriptPath $StartScript -Arguments ((Get-PortArguments) + @('-RestartExisting'))
 }
 
 function Restart-Start-Skin {
   if (-not (Confirm-Action $Text.restartConfirm)) { return $Text.cancelled }
   Start-ScriptProcess -BusyText $Text.busyRestart -DoneText $Text.doneRestart `
-    -ScriptPath $StartScript -Arguments @('-Port', "$Port", '-RestartExisting')
+    -ScriptPath $StartScript -Arguments ((Get-PortArguments) + @('-RestartExisting'))
 }
 
 function Verify-Skin {
@@ -408,12 +414,12 @@ function Verify-Skin {
   $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
   $screenshot = Join-Path $OutputsRoot "verify-$stamp.png"
   Start-ScriptProcess -BusyText $Text.busyVerify -DoneText $Text.doneVerify `
-    -ScriptPath $VerifyScript -Arguments @('-Port', "$Port", '-ScreenshotPath', $screenshot) `
+    -ScriptPath $VerifyScript -Arguments ((Get-PortArguments) + @('-ScreenshotPath', $screenshot)) `
     -ExtraDoneText ("`r`n`r`n" + $Text.screenshotSaved + $screenshot) -TimeoutSeconds 90
 }
 
 function Restart-DreamSkinAfterThemeChange {
-  $output = Invoke-ScriptProcess -ScriptPath $StartScript -Arguments @('-Port', "$Port", '-RestartExisting') -TimeoutSeconds 120
+  $output = Invoke-ScriptProcess -ScriptPath $StartScript -Arguments ((Get-PortArguments) + @('-RestartExisting')) -TimeoutSeconds 120
   if ($output) { return $output }
   return 'Dream Skin 已重新启动，主题应已生效。'
 }
@@ -438,13 +444,13 @@ function Restore-DefaultImage {
 
 function Restore-Official {
   Start-ScriptProcess -BusyText $Text.busyRestore -DoneText $Text.doneRestore `
-    -ScriptPath $RestoreScript -Arguments @('-Port', "$Port", '-RestoreBaseTheme', '-PromptRestart')
+    -ScriptPath $RestoreScript -Arguments ((Get-PortArguments) + @('-RestoreBaseTheme', '-PromptRestart'))
 }
 
 function Uninstall-Skin {
   if (-not (Confirm-Action $Text.uninstallConfirm)) { return $Text.cancelled }
   Start-ScriptProcess -BusyText $Text.busyUninstall -DoneText $Text.doneUninstall `
-    -ScriptPath $RestoreScript -Arguments @('-Port', "$Port", '-Uninstall', '-RestoreBaseTheme', '-PromptRestart')
+    -ScriptPath $RestoreScript -Arguments ((Get-PortArguments) + @('-Uninstall', '-RestoreBaseTheme', '-PromptRestart'))
 }
 
 function Open-Logs {

@@ -5,6 +5,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $Host.UI.RawUI.WindowTitle = 'Codex Dream Skin'
+$PortExplicit = $PSBoundParameters.ContainsKey('Port')
 
 $AppRoot = Split-Path -Parent $PSCommandPath
 $PackageRoot = Split-Path -Parent $AppRoot
@@ -68,12 +69,17 @@ function Confirm-Yes {
   return $answer -match '^(y|yes)$'
 }
 
+function Get-PortArguments {
+  if ($PortExplicit) { return @('-Port', "$Port") }
+  return @()
+}
+
 function Invoke-Install {
-  & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $InstallScript -Port $Port
+  & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $InstallScript @(Get-PortArguments)
 }
 
 function Invoke-Start {
-  & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $StartScript -Port $Port -PromptRestart
+  & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $StartScript @((Get-PortArguments) + @('-PromptRestart'))
 }
 
 function Invoke-RestartStart {
@@ -81,11 +87,11 @@ function Invoke-RestartStart {
     Write-Host 'Cancelled.'
     return
   }
-  & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $StartScript -Port $Port -RestartExisting
+  & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $StartScript @((Get-PortArguments) + @('-RestartExisting'))
 }
 
 function Invoke-Restore {
-  & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $RestoreScript -Port $Port -RestoreBaseTheme -PromptRestart
+  & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $RestoreScript @((Get-PortArguments) + @('-RestoreBaseTheme', '-PromptRestart'))
 }
 
 function Invoke-Uninstall {
@@ -93,14 +99,14 @@ function Invoke-Uninstall {
     Write-Host 'Cancelled.'
     return
   }
-  & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $RestoreScript -Port $Port -Uninstall -RestoreBaseTheme -PromptRestart
+  & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $RestoreScript @((Get-PortArguments) + @('-Uninstall', '-RestoreBaseTheme', '-PromptRestart'))
 }
 
 function Invoke-Verify {
   New-Item -ItemType Directory -Force -Path $OutputsRoot | Out-Null
   $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
   $screenshot = Join-Path $OutputsRoot "verify-$stamp.png"
-  & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $VerifyScript -Port $Port -ScreenshotPath $screenshot
+  & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $VerifyScript @((Get-PortArguments) + @('-ScreenshotPath', $screenshot))
   if (Test-Path -LiteralPath $screenshot) {
     Write-Host "Screenshot saved: $screenshot" -ForegroundColor Green
   }
