@@ -1,9 +1,10 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param()
 
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $PSScriptRoot
 . (Join-Path $Root 'scripts\common-windows.ps1')
+. (Join-Path $Root 'scripts\theme-windows.ps1')
 
 $temporaryRoot = Join-Path ([System.IO.Path]::GetTempPath()) "codex-dream-skin-tests-$PID-$([guid]::NewGuid().ToString('N'))"
 New-Item -ItemType Directory -Path $temporaryRoot | Out-Null
@@ -20,8 +21,12 @@ try {
 
   Install-DreamSkinBaseTheme -ConfigPath $configPath -BackupPath $backupPath
   $installed = Read-DreamSkinUtf8File -Path $configPath
-  if (-not $installed.Contains($projectName) -or $installed -notmatch 'appearanceTheme = "light"') {
-    throw 'Install changed a non-ASCII project name or missed the base theme.'
+  if (-not $installed.Contains($projectName) -or $installed -notmatch 'appearanceTheme = "system"' -or
+    $installed -notmatch 'appearanceLightCodeThemeId = "codex"') {
+    throw 'Install changed a non-ASCII project name or failed to preserve the native appearance.'
+  }
+  if (-not (Test-Path -LiteralPath (Get-DreamSkinAppearanceMarkerPath -BackupPath $backupPath))) {
+    throw 'Install did not record the appearance-preservation marker.'
   }
   $backupBytes = [System.IO.File]::ReadAllBytes($backupPath)
   if ([Convert]::ToBase64String($backupBytes) -cne [Convert]::ToBase64String($originalBytes)) {
@@ -34,17 +39,37 @@ try {
   }
 
   $installed += "afterInstall = `"$laterValue`"`r`n"
+  $installed = $installed -replace 'appearanceTheme = "system"', 'appearanceTheme = "dark"'
   Write-DreamSkinUtf8FileAtomically -Path $configPath -Content $installed
   Restore-DreamSkinBaseTheme -ConfigPath $configPath -BackupPath $backupPath
   $restored = Read-DreamSkinUtf8File -Path $configPath
   if (-not $restored.Contains($projectName) -or -not $restored.Contains($laterValue)) {
     throw 'Restore changed a project name or unrelated post-install setting.'
   }
-  if ($restored -notmatch 'appearanceTheme = "system"' -or -not $restored.Contains('appearanceLightCodeThemeId = "theme-$special"')) {
-    throw 'Restore did not put the original base theme keys back.'
+  if ($restored -notmatch 'appearanceTheme = "dark"' -or -not $restored.Contains('appearanceLightCodeThemeId = "theme-$special"')) {
+    throw 'Restore overwrote the user appearance or failed to restore the light code theme.'
   }
   if ($restored -notmatch '(?ms)^\[other\].*?appearanceTheme = "keep-other"') {
     throw 'Restore changed an appearance key outside the desktop section.'
+  }
+
+  $legacyConfigPath = Join-Path $temporaryRoot 'legacy-light.toml'
+  $legacyBackupPath = Join-Path $temporaryRoot 'legacy-light.before.toml'
+  $legacyCurrent = "[desktop]`r`n$($script:DreamSkinLegacyAppearanceTheme)`r`n$($script:DreamSkinManagedLightCodeTheme)`r`n$($script:DreamSkinManagedLightChromeTheme)`r`n"
+  $legacyOriginal = "[desktop]`r`nappearanceTheme = `"system`"`r`nappearanceLightCodeThemeId = `"theme-original`"`r`nappearanceLightChromeTheme = { surface = `"original`" }`r`n"
+  [System.IO.File]::WriteAllText($legacyConfigPath, $legacyCurrent, $utf8NoBom)
+  [System.IO.File]::WriteAllText($legacyBackupPath, $legacyOriginal, $utf8NoBom)
+  Install-DreamSkinBaseTheme -ConfigPath $legacyConfigPath -BackupPath $legacyBackupPath
+  $legacyMigrated = Read-DreamSkinUtf8File -Path $legacyConfigPath
+  if ($legacyMigrated -notmatch 'appearanceTheme = "system"' -or
+    $legacyMigrated -notmatch 'appearanceLightCodeThemeId = "codex"') {
+    throw 'Exact legacy managed light trio was not migrated to the saved native appearance.'
+  }
+  $legacyMigrated = $legacyMigrated -replace 'appearanceTheme = "system"', 'appearanceTheme = "dark"'
+  Write-DreamSkinUtf8FileAtomically -Path $legacyConfigPath -Content $legacyMigrated
+  Restore-DreamSkinBaseTheme -ConfigPath $legacyConfigPath -BackupPath $legacyBackupPath
+  if ((Read-DreamSkinUtf8File -Path $legacyConfigPath) -notmatch 'appearanceTheme = "dark"') {
+    throw 'A current install restore overwrote the user appearance after legacy migration.'
   }
 
   $lfConfigPath = Join-Path $temporaryRoot 'config-lf.toml'
@@ -309,11 +334,208 @@ try {
     throw 'Stale state was not preserved under an archive name.'
   }
 
+  $themeStateRoot = Join-Path $temporaryRoot 'theme-state'
+  $themePaths = Initialize-DreamSkinThemeStore -SkillRoot $Root -StateRoot $themeStateRoot
+  $initialTheme = Read-DreamSkinTheme -ThemeDirectory $themePaths.Active
+  if ($initialTheme.Theme.id -cne 'preset-romantic-rose' -or
+    $initialTheme.Theme.name -cne '桥本有菜' -or
+    $initialTheme.Theme.appearance -cne 'auto' -or
+    $initialTheme.Theme.art.safeArea -cne 'left' -or
+    $initialTheme.Theme.art.taskMode -cne 'ambient' -or
+    [System.IO.Path]::GetExtension($initialTheme.ImagePath) -cne '.jpg') {
+    throw 'Default Windows theme did not seed the Arina Hashimoto wallpaper contract.'
+  }
+  $preseededThemes = @(Get-DreamSkinSavedThemes -StateRoot $themeStateRoot)
+  if ($preseededThemes.Count -ne 1 -or
+    $preseededThemes[0].Id -cne 'preset-romantic-rose' -or
+    $preseededThemes[0].Name -cne '桥本有菜') {
+    throw 'Arina Hashimoto was not preseeded in the Windows saved-theme menu.'
+  }
+  $updatedTheme = Set-DreamSkinActiveTheme -ImagePath (Join-Path $Root 'assets\dream-reference.jpg') `
+    -Theme $null -Name '测试主题' -StateRoot $themeStateRoot
+  if ($updatedTheme.Theme.name -cne '测试主题' -or
+    $updatedTheme.Theme.id -cne 'custom' -or
+    $updatedTheme.Theme.art.safeArea -cne 'auto' -or
+    $updatedTheme.Theme.art.taskMode -cne 'auto' -or
+    -not (Test-DreamSkinThemePathWithin -Path $updatedTheme.ImagePath -Root $themePaths.Active)) {
+    throw 'Imported image did not reset to the generic adaptive contract inside the managed directory.'
+  }
+  $null = Initialize-DreamSkinThemeStore -SkillRoot $Root -StateRoot $themeStateRoot
+  $idempotentTheme = Read-DreamSkinTheme -ThemeDirectory $themePaths.Active
+  if ($idempotentTheme.Theme.id -cne 'custom' -or
+    @(Get-DreamSkinSavedThemes -StateRoot $themeStateRoot).Count -ne 1) {
+    throw 'Theme-store initialization overwrote the active custom theme or duplicated its bundled preset.'
+  }
+  $savedTheme = Save-DreamSkinCurrentTheme -Name '已保存主题' -StateRoot $themeStateRoot
+  if ($savedTheme.Theme.name -cne '已保存主题' -or @(Get-DreamSkinSavedThemes -StateRoot $themeStateRoot).Count -ne 2) {
+    throw 'Saved theme creation or discovery failed.'
+  }
+  $null = Use-DreamSkinSavedTheme -ThemeDirectory $savedTheme.Directory -StateRoot $themeStateRoot
+
+  $outsideTheme = Join-Path $temporaryRoot 'outside-theme'
+  New-Item -ItemType Directory -Path $outsideTheme | Out-Null
+  Copy-Item -LiteralPath (Join-Path $Root 'assets\dream-reference.jpg') `
+    -Destination (Join-Path $outsideTheme 'dream-reference.jpg')
+  Copy-Item -LiteralPath (Join-Path $Root 'assets\theme.json') `
+    -Destination (Join-Path $outsideTheme 'theme.json')
+  $junctionTheme = Join-Path $themePaths.Saved 'junction-escape'
+  $null = New-Item -ItemType Junction -Path $junctionTheme -Target $outsideTheme
+  $junctionRejected = $false
+  try {
+    $null = Use-DreamSkinSavedTheme -ThemeDirectory $junctionTheme -StateRoot $themeStateRoot
+  } catch { $junctionRejected = $true }
+  if (-not $junctionRejected) { throw 'Saved-theme junction escaped the managed theme directory.' }
+  [System.IO.Directory]::Delete($junctionTheme)
+
+  Set-DreamSkinPaused -Paused $true -StateRoot $themeStateRoot | Out-Null
+  if (-not (Test-DreamSkinPaused -StateRoot $themeStateRoot)) { throw 'Pause marker was not created.' }
+  Set-DreamSkinPaused -Paused $false -StateRoot $themeStateRoot | Out-Null
+  if (Test-DreamSkinPaused -StateRoot $themeStateRoot) { throw 'Pause marker was not removed.' }
+
+  $oversizedTheme = Join-Path $temporaryRoot 'oversized-theme'
+  New-Item -ItemType Directory -Path $oversizedTheme | Out-Null
+  $oversizedImage = Join-Path $oversizedTheme 'oversized.jpg'
+  $oversizedStream = [System.IO.File]::Open($oversizedImage, [System.IO.FileMode]::CreateNew)
+  try { $oversizedStream.SetLength((16 * 1024 * 1024) + 1) } finally { $oversizedStream.Dispose() }
+  Write-DreamSkinUtf8FileAtomically -Path (Join-Path $oversizedTheme 'theme.json') `
+    -Content "{`"image`":`"oversized.jpg`"}`r`n"
+  $oversizedReadRejected = $false
+  try { $null = Read-DreamSkinTheme -ThemeDirectory $oversizedTheme } catch { $oversizedReadRejected = $true }
+  $oversizedSetRejected = $false
+  try {
+    $null = Set-DreamSkinActiveTheme -ImagePath $oversizedImage -Theme $null -StateRoot $themeStateRoot
+  } catch { $oversizedSetRejected = $true }
+  if (-not $oversizedReadRejected -or -not $oversizedSetRejected) {
+    throw 'The 16 MB image limit was not enforced before theme copy or payload construction.'
+  }
+
+  $oversizedDimensionImage = Join-Path $temporaryRoot 'oversized-dimension.png'
+  $pngHeader = New-Object byte[] 24
+  [byte[]](0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a) | ForEach-Object -Begin { $i = 0 } -Process { $pngHeader[$i++] = $_ }
+  $pngHeader[8] = 0; $pngHeader[9] = 0; $pngHeader[10] = 0; $pngHeader[11] = 13
+  [byte[]](0x49, 0x48, 0x44, 0x52) | ForEach-Object -Begin { $i = 12 } -Process { $pngHeader[$i++] = $_ }
+  $pngHeader[16] = 0; $pngHeader[17] = 0; $pngHeader[18] = 0x27; $pngHeader[19] = 0x10
+  $pngHeader[20] = 0; $pngHeader[21] = 0; $pngHeader[22] = 0x17; $pngHeader[23] = 0x70
+  [System.IO.File]::WriteAllBytes($oversizedDimensionImage, $pngHeader)
+  $oversizedDimensionRejected = $false
+  try { $null = Set-DreamSkinActiveTheme -ImagePath $oversizedDimensionImage -Theme $null -StateRoot $themeStateRoot } catch { $oversizedDimensionRejected = $true }
+  if (-not $oversizedDimensionRejected) { throw 'A 16384px/50MP-invalid import was copied into the active theme.' }
+
+  $reparseStateRoot = Join-Path $temporaryRoot 'reparse-state'
+  New-Item -ItemType Directory -Path $reparseStateRoot | Out-Null
+  $outsideActive = Join-Path $temporaryRoot 'outside-active'
+  New-Item -ItemType Directory -Path $outsideActive | Out-Null
+  $reparseActive = Join-Path $reparseStateRoot 'active-theme'
+  $null = New-Item -ItemType Junction -Path $reparseActive -Target $outsideActive
+  $reparseInitRejected = $false
+  try { $null = Initialize-DreamSkinThemeStore -SkillRoot $Root -StateRoot $reparseStateRoot } catch { $reparseInitRejected = $true }
+  if (-not $reparseInitRejected) { throw 'Theme-store initialization followed an active-theme junction.' }
+  [System.IO.Directory]::Delete($reparseActive)
+
+  $css = Read-DreamSkinUtf8File -Path (Join-Path $Root 'assets\dream-skin.css')
+  foreach ($requiredCss in @(
+    'background-image: var(--dream-art)',
+    'main.main-surface > header.app-header-tint',
+    '.app-shell-main-content-top-fade',
+    '.thread-scroll-container .bg-gradient-to-t.from-token-main-surface-primary',
+    '--dream-immersive-composer',
+    'background-position: var(--dream-art-position)',
+    '.dream-home-utility',
+    ':has(.dream-home-utility) .composer-surface-chrome',
+    ':is(.dream-task-ambient, .dream-task-banner):has(main.main-surface:not(.dream-home-shell))'
+  )) {
+    if (-not $css.Contains($requiredCss)) { throw "Windows immersive CSS is missing: $requiredCss" }
+  }
+  $traySource = Read-DreamSkinUtf8File -Path (Join-Path $Root 'scripts\tray-dream-skin.ps1')
+  foreach ($requiredTrayAction in @('System.Windows.Forms.NotifyIcon', '暂停皮肤', '更换背景图', '已保存主题', '完全恢复 Codex')) {
+    if (-not $traySource.Contains($requiredTrayAction)) { throw "Tray action is missing: $requiredTrayAction" }
+  }
+  if (-not $traySource.Contains('$nextPaused') -or -not $traySource.Contains('[System.Windows.Forms.Application]::Exit()')) {
+    throw 'Tray pause/restore closures do not terminate cleanly.'
+  }
+  if (-not $traySource.Contains('Read-DreamSkinTheme -ThemeDirectory $paths.Active -SkipImageMetadata') -or
+    -not $traySource.Contains('Get-DreamSkinSavedThemes -StateRoot $StateRoot -SkipImageMetadata')) {
+    throw 'Tray menu metadata enumeration still performs full image parsing on every open.'
+  }
+  $restoreSource = Read-DreamSkinUtf8File -Path (Join-Path $Root 'scripts\restore-dream-skin.ps1')
+  if (-not $restoreSource.Contains('Stop-DreamSkinTrayProcess')) {
+    throw 'Complete restore does not stop a separately launched tray process.'
+  }
+  $startSource = Read-DreamSkinUtf8File -Path (Join-Path $Root 'scripts\start-dream-skin.ps1')
+  $stateReadIndex = $startSource.IndexOf('$previousState = Read-DreamSkinState', [System.StringComparison]::Ordinal)
+  $restartPromptIndex = $startSource.IndexOf('$restartAuthorized = Confirm-DreamSkinRestart', [System.StringComparison]::Ordinal)
+  $recordedStopIndex = $startSource.IndexOf('$recordedInjectorStopped = Stop-DreamSkinRecordedInjector', [System.StringComparison]::Ordinal)
+  $cancelIndex = $startSource.IndexOf("Write-Host 'Dream Skin launch was cancelled", [System.StringComparison]::Ordinal)
+  $pauseClearIndex = $startSource.IndexOf('Set-DreamSkinPaused -Paused $false', [System.StringComparison]::Ordinal)
+  if ($stateReadIndex -lt 0 -or $pauseClearIndex -le $stateReadIndex -or
+    ($restartPromptIndex -ge 0 -and $pauseClearIndex -le $restartPromptIndex) -or
+    ($recordedStopIndex -ge 0 -and $pauseClearIndex -le $recordedStopIndex) -or
+    ($cancelIndex -ge 0 -and $cancelIndex -ge $pauseClearIndex)) {
+    throw 'Start clears the pause marker before state validation or restart consent, or before its cancellation branch.'
+  }
+  if (-not $startSource.Contains('$pauseWasSet = Test-DreamSkinPaused') -or
+    -not $startSource.Contains('$pauseCleared = $true') -or
+    -not $startSource.Contains('Set-DreamSkinPaused -Paused $true -StateRoot $StateRoot')) {
+    throw 'Start does not preserve an existing pause marker when startup rolls back.'
+  }
+
+  $rendererSource = Read-DreamSkinUtf8File -Path (Join-Path $Root 'assets\renderer-inject.js')
+  foreach ($requiredRendererBehavior in @('dream-home-utility', 'artMetadata', 'detectShellAppearance')) {
+    if (-not $rendererSource.Contains($requiredRendererBehavior)) {
+      throw "Renderer adaptive behavior is missing: $requiredRendererBehavior"
+    }
+  }
+  $injectorSource = Read-DreamSkinUtf8File -Path (Join-Path $Root 'scripts\injector.mjs')
+  foreach ($requiredInjectorBehavior in @(
+    'MAX_ART_BYTES', 'createHash', 'readImageMetadata', '50MP safety limit', 'STRONG_THEME_AUDIT_MS',
+    'Page.addScriptToEvaluateOnNewDocument', 'Page.removeScriptToEvaluateOnNewDocument', 'earlyPayloadFor'
+  )) {
+    if (-not $injectorSource.Contains($requiredInjectorBehavior)) {
+      throw "Injector theme safety is missing: $requiredInjectorBehavior"
+    }
+  }
+  $themeSource = Read-DreamSkinUtf8File -Path (Join-Path $Root 'scripts\theme-windows.ps1')
+  foreach ($requiredThemeSafety in @(
+    '[System.IO.FileAttributes]::ReparsePoint',
+    'Ensure-DreamSkinManagedDirectory',
+    'Get-DreamSkinValidatedImageMetadata',
+    '16384px / 50MP safety limit',
+    'Assert-DreamSkinImageFile -Path $temporary',
+    'Assert-DreamSkinImageFile -Path $imageArchive'
+  )) {
+    if (-not $themeSource.Contains($requiredThemeSafety)) {
+      throw "PowerShell theme-store safety is missing: $requiredThemeSafety"
+    }
+  }
+  $commonSource = Read-DreamSkinUtf8File -Path (Join-Path $Root 'scripts\common-windows.ps1')
+  if (-not $commonSource.Contains('State was preserved.')) {
+    throw 'Mismatched live injector identity does not fail closed with preserved state.'
+  }
+
   $node = Get-DreamSkinNodeRuntime
   & $node.Path (Join-Path $Root 'scripts\injector.mjs') --self-test *> $null
   if ($LASTEXITCODE -ne 0) { throw 'Injector CDP self-test failed.' }
   & $node.Path (Join-Path $Root 'scripts\injector.mjs') --check-payload *> $null
   if ($LASTEXITCODE -ne 0) { throw 'Injector self-test failed.' }
+  & $node.Path (Join-Path $Root 'scripts\injector.mjs') --check-payload --theme-dir $themePaths.Active *> $null
+  if ($LASTEXITCODE -ne 0) { throw 'Managed theme payload validation failed.' }
+  $previousErrorActionPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = 'Continue'
+    & $node.Path (Join-Path $Root 'scripts\injector.mjs') --check-payload --theme-dir $oversizedTheme *> $null
+    $oversizedPayloadExitCode = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $previousErrorActionPreference
+  }
+  if ($oversizedPayloadExitCode -eq 0) { throw 'Node injector accepted an image over the 16 MB limit.' }
+  & $node.Path (Join-Path $PSScriptRoot 'renderer-inject.test.mjs')
+  if ($LASTEXITCODE -ne 0) { throw 'Renderer auxiliary-window regression test failed.' }
+  & $node.Path (Join-Path $PSScriptRoot 'injector-bootstrap.test.mjs')
+  if ($LASTEXITCODE -ne 0) { throw 'Injector early-bootstrap regression test failed.' }
+  & $node.Path (Join-Path $PSScriptRoot 'injector-one-shot.test.mjs')
+  if ($LASTEXITCODE -ne 0) { throw 'Injector one-shot Browser ID regression test failed.' }
+  & $node.Path (Join-Path $PSScriptRoot 'image-metadata.test.mjs')
+  if ($LASTEXITCODE -ne 0) { throw 'Image metadata regression test failed.' }
 
   Write-Host 'PASS: config transactions, restore scoping, state safety, argument quoting, and loopback CDP validation.'
 } finally {

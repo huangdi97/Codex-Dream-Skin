@@ -1,32 +1,51 @@
-Codex Dream Skin theme package format
+Codex Dream Skin adaptive theme format
 
-A theme package is one folder. It can be a built-in folder under:
+A theme is one folder containing:
 
-  app\themes\<theme-id>\
+  theme.json
+  one image file referenced by theme.json
 
-or a custom folder selected from the GUI.
+Example:
 
-Supported files:
+  arina-theme\
+    theme.json
+    arina.jpg
 
-  theme.json              Optional manifest.
-  dream-controls.css      Optional control style overrides.
-  dream-reference.png     Optional home image.
-  dream-background.png    Optional global background image.
-  dream-palette.css       Optional color variables.
-
-Recommended theme.json:
+Minimal theme.json:
 
 {
-  "name": "Customer Theme Name",
-  "controls": "dream-controls.css",
-  "homeImage": "dream-reference.png",
-  "backgroundImage": "dream-background.png",
-  "palette": "dream-palette.css"
+  "schemaVersion": 1,
+  "id": "arina-theme",
+  "name": "Arina Theme",
+  "image": "arina.jpg",
+  "appearance": "auto",
+  "art": {
+    "focusX": 0.5,
+    "focusY": 0.42,
+    "safeArea": "auto",
+    "taskMode": "auto"
+  },
+  "palette": {
+    "accent": "#d86b8d"
+  }
 }
 
-Only include the files that the theme needs to change. For example, a style
-preset can include only theme.json and dream-controls.css. A full customer
-theme can include all five files.
+Rules:
+- image must be a relative file name inside the same theme folder.
+- supported image formats are PNG, JPG, JPEG, and WEBP.
+- image files must be under 16 MB.
+- appearance can be auto, light, or dark.
+- focusX and focusY are 0.0 to 1.0 crop focus points.
+- safeArea can usually stay auto.
+- taskMode can usually stay auto.
+- palette.accent can be any CSS hex color, such as #d86b8d.
 
-After applying a theme package, restart Dream Skin Codex from the manager.
+Seller workflow for a requested person/character:
+1. Create one folder named after the request.
+2. Put the chosen image into the folder.
+3. Create theme.json and set image to that file name.
+4. Adjust name and palette.accent.
+5. In the one-click manager, use "主题库 / 导入主题" and select the folder.
 
+The old control preset format with dream-controls.css, dream-reference.png,
+dream-background.png, and dream-palette.css is no longer used by this package.

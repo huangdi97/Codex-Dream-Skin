@@ -7,7 +7,7 @@ Upstream:
 https://github.com/Fei-Away/Codex-Dream-Skin
 
 Upstream commit used while packaging:
-d80a3bc
+5fd8af5
 
 What this package adds:
 - Start-CodexDreamSkin-GUI.vbs: no-console double-click GUI launcher.
@@ -15,10 +15,8 @@ What this package adds:
 - app/skin-manager-gui.ps1: Windows Forms GUI wrapper for buyer-friendly use.
 - app/skin-manager.ps1: menu wrapper for install, start, verify, image swap,
   restore, uninstall, and log access.
-- app/windows/assets/dream-reference.png: neutral no-celebrity, no-brand default
-  home theme image generated for buyer-safe demos.
-- app/windows/assets/dream-background.png: neutral abstract global background
-  without text, matched to the home theme image palette.
+- app/windows: upstream Windows 1.2.0 adaptive full-window skin engine.
+- app/windows/assets/dream-reference.jpg and theme.json: default adaptive theme.
 - README.txt: buyer-facing usage instructions.
 - docs/seller-sop.txt: seller-facing delivery workflow.
 - NOTICE.txt and LICENSE.txt: source, license, and safety boundary notes.
@@ -32,18 +30,15 @@ Compatibility changes applied to the packaged Windows copy:
   showing the upstream WScript popup.
 - app/skin-manager-gui.ps1 prompts to close a running Codex before install /
   repair, avoiding the upstream config lock failure message.
-- app/windows/assets/dream-skin.css applies the selected image as a global
-  background, not only on the home screen hero.
-- app/windows/assets/dream-skin.css now uses one continuous global background
-  behind both the sidebar and main surface; those panels are translucent.
-- app/skin-manager-gui.ps1 can apply a chosen image to all areas, home only,
-  or non-home global backgrounds only.
-- app/skin-manager-gui.ps1 can apply a theme package that changes control
-  styling through app/windows/assets/dream-controls.css.
-- app/themes contains built-in control presets: Default Dream, Clear Glass,
-  Stage Gold, and Red Gold.
-- docs/theme-packages.txt documents the custom theme folder format for seller
-  customization work.
+- app/skin-manager-gui.ps1 uses the upstream active-theme store, so chosen
+  images and imported themes update the running watcher without replacing
+  bundled asset files.
+- app/skin-manager.ps1 uses the same active-theme store as a fallback console
+  menu.
+- docs/theme-packages.txt documents the current theme.json + image folder
+  format for seller customization work.
+- The old app/themes control-preset folders were removed because upstream 1.2.0
+  now drives appearance through the adaptive theme engine.
 - Start-CodexDreamSkin-GUI.vbs exits explicitly after launching the GUI to
   avoid a stuck Windows Script Host process.
 - Start-CodexDreamSkin-GUI.vbs launches PowerShell in STA mode.

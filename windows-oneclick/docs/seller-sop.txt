@@ -5,7 +5,7 @@
 2. 买家是否已经安装 Codex 桌面端。
 3. Codex 是否能正常打开并登录。
 4. 买家是否已经安装 Node.js 22+。
-5. 买家要默认主题，还是提供自己的图片。
+5. 买家要默认主题、自己提供图片，还是指定某个人/角色的主题。
 
 远程安装边界：
 - 账号登录、系统密码、OpenAI 登录、API Key 都让买家本人操作。
@@ -24,19 +24,20 @@
 9. 如果 GUI 无法打开，再使用 Start-CodexDreamSkin.cmd 备用入口。
 
 主题定制流程：
-1. 基础换图单：让买家提供 PNG/JPG，使用“换自己的图片”。
-2. 控件风格单：使用“主题包 / 控件风格”，选择内置 Default Dream / Clear Glass / Stage Gold / Red Gold。
-3. 专属定制单：给买家建立一个主题文件夹，至少包含 theme.json 和 dream-controls.css；如需全套效果，再加入 dream-reference.png、dream-background.png、dream-palette.css。
-4. 主题文件夹格式见 docs/theme-packages.txt。
+1. 基础换图单：让买家提供 PNG/JPG/JPEG/WEBP，使用“换自己的图片”。系统会自动套用全窗口自适应布局。
+2. 指定人物/角色单：准备一张清晰图片，建立一个主题文件夹，放入图片和 theme.json，然后让买家点“主题库 / 导入主题”选择该文件夹。
+3. 主题命名建议：用买家能认出的名字，例如 Arina Hashimoto Theme、Customer Idol Theme、Anime Blue Theme。
+4. theme.json 至少需要 name、image、appearance、art、palette 字段；格式见 docs/theme-packages.txt。
+5. 想微调构图时，改 theme.json 的 art.focusX、art.focusY、art.safeArea、art.taskMode，而不是再改控件 CSS。
 
 售后话术：
 - Codex 更新后皮肤消失：重新运行 1 安装 / 修复，然后运行 2。
 - 启动失败：关闭 Codex，运行 7 恢复，再运行 1 和 3。
-- 想换图：点击“换自己的图片”，选择 PNG/JPG 图片。
-- 想换控件风格：点击“主题包 / 控件风格”，选择一个预设或卖家发的主题文件夹。
+- 想换图：点击“换自己的图片”，选择 PNG/JPG/JPEG/WEBP 图片。
+- 想要某个人/角色主题：点击“主题库 / 导入主题”，选择卖家发的主题文件夹。
 - 不想用了：点击“恢复官方外观”，再点击“卸载快捷方式”。
 
 商品说明建议：
-Codex 桌面端第三方主题美化安装包，图形界面一键安装、一键启动、自定义图片、一键恢复官方外观。非 OpenAI 官方产品，不提供账号，不索要密码或 API Key，不修改官方安装包。
+Codex 桌面端第三方主题美化安装包，图形界面一键安装、一键启动、自定义图片、自适应主题导入、一键恢复官方外观。非 OpenAI 官方产品，不提供账号，不索要密码或 API Key，不修改官方安装包。
 
 
