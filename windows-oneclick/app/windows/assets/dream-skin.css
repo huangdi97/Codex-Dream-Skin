@@ -27,6 +27,9 @@
   --dream-task-immersive-edge: color-mix(in oklab, var(--dream-surface) 86%, transparent);
   --dream-task-immersive-mid: color-mix(in oklab, var(--dream-surface) 78%, transparent);
   --dream-task-immersive-far: color-mix(in oklab, var(--dream-surface) 66%, transparent);
+  --dream-task-mask: color-mix(in oklab, var(--dream-surface) 64%, transparent);
+  --dream-task-mask-strong: color-mix(in oklab, var(--dream-surface-raised) 76%, transparent);
+  --dream-task-mask-soft: color-mix(in oklab, var(--dream-surface) 48%, transparent);
 }
 
 :root.codex-dream-skin.dream-theme-dark {
@@ -54,6 +57,9 @@
   --dream-task-immersive-edge: color-mix(in oklab, var(--dream-surface) 82%, transparent);
   --dream-task-immersive-mid: color-mix(in oklab, var(--dream-surface) 74%, transparent);
   --dream-task-immersive-far: color-mix(in oklab, var(--dream-surface) 60%, transparent);
+  --dream-task-mask: color-mix(in oklab, var(--dream-surface) 58%, transparent);
+  --dream-task-mask-strong: color-mix(in oklab, var(--dream-surface-raised) 72%, transparent);
+  --dream-task-mask-soft: color-mix(in oklab, var(--dream-surface) 42%, transparent);
 }
 
 html.codex-dream-skin body {
@@ -404,9 +410,7 @@ html.codex-dream-skin.dream-art-wide:is(.dream-task-ambient, .dream-task-banner)
 
 html.codex-dream-skin.dream-art-wide:is(.dream-task-ambient, .dream-task-banner):has(main.main-surface:not(.dream-home-shell))
   aside.app-shell-left-panel {
-  background: linear-gradient(90deg,
-    var(--dream-task-immersive-sidebar),
-    var(--dream-task-immersive-edge)) !important;
+  background: var(--dream-task-mask) !important;
 }
 
 html.codex-dream-skin.dream-art-wide:has(main.main-surface.dream-home-shell)
@@ -428,10 +432,7 @@ html.codex-dream-skin.dream-art-wide:is(.dream-task-ambient, .dream-task-banner)
 }
 
 html.codex-dream-skin.dream-art-wide:is(.dream-task-ambient, .dream-task-banner) main.main-surface:not(.dream-home-shell) {
-  background: linear-gradient(90deg,
-    var(--dream-task-immersive-edge),
-    var(--dream-task-immersive-mid) 64%,
-    var(--dream-task-immersive-far)) !important;
+  background: var(--dream-task-mask) !important;
 }
 
 html.codex-dream-skin.dream-art-wide:is(.dream-task-ambient, .dream-task-banner) .dream-task {
@@ -525,7 +526,7 @@ html.codex-dream-skin.dream-art-wide:is(.dream-task-ambient, .dream-task-banner)
 
 html.codex-dream-skin.dream-art-wide:is(.dream-task-ambient, .dream-task-banner)
   main.main-surface:not(.dream-home-shell) div.no-drag:has(> input[type="text"]) {
-  background: var(--dream-immersive-composer) !important;
+  background: var(--dream-task-mask-strong) !important;
   border: 0 !important;
   box-shadow: inset 0 0 0 1px var(--dream-immersive-line) !important;
   backdrop-filter: none !important;
@@ -551,20 +552,54 @@ html.codex-dream-skin.dream-art-wide main.main-surface
   background: transparent !important;
 }
 
+html.codex-dream-skin.dream-art-wide:is(.dream-task-chrome-auto, .dream-task-chrome-all):is(.dream-task-ambient, .dream-task-banner)
+  main.main-surface:not(.dream-home-shell) > header.app-header-tint,
 html.codex-dream-skin.dream-art-wide.dream-task-chrome-all:is(.dream-task-ambient, .dream-task-banner)
   main.main-surface:not(.dream-home-shell) > header.app-header-tint,
 html.codex-dream-skin.dream-art-wide.dream-task-chrome-top:is(.dream-task-ambient, .dream-task-banner)
   main.main-surface:not(.dream-home-shell) > header.app-header-tint {
-  background: color-mix(in oklab, var(--dream-surface) 72%, transparent) !important;
+  background: var(--dream-task-mask) !important;
   border-bottom: 1px solid var(--dream-immersive-line) !important;
   box-shadow: 0 8px 28px color-mix(in oklab, var(--dream-canvas) 12%, transparent) !important;
   backdrop-filter: blur(10px) saturate(1.05) !important;
 }
 
+html.codex-dream-skin.dream-art-wide:is(.dream-task-chrome-auto, .dream-task-chrome-all, .dream-task-chrome-content):is(.dream-task-ambient, .dream-task-banner)
+  aside.app-shell-left-panel,
+html.codex-dream-skin.dream-art-wide:is(.dream-task-chrome-auto, .dream-task-chrome-all, .dream-task-chrome-content):is(.dream-task-ambient, .dream-task-banner)
+  main.main-surface:not(.dream-home-shell) {
+  background: var(--dream-task-mask) !important;
+}
+
+html.codex-dream-skin.dream-art-wide:is(.dream-task-chrome-auto, .dream-task-chrome-all):is(.dream-task-ambient, .dream-task-banner)
+  .composer-surface-chrome,
+html.codex-dream-skin.dream-art-wide:is(.dream-task-chrome-auto, .dream-task-chrome-all, .dream-task-chrome-bottom):is(.dream-task-ambient, .dream-task-banner)
+  main.main-surface:not(.dream-home-shell) div.no-drag:has(> input[type="text"]) {
+  background: var(--dream-task-mask-strong) !important;
+  box-shadow: inset 0 0 0 1px var(--dream-immersive-line) !important;
+}
+
+html.codex-dream-skin.dream-art-wide:is(.dream-task-chrome-auto, .dream-task-chrome-all, .dream-task-chrome-content):is(.dream-task-ambient, .dream-task-banner)
+  main.main-surface:not(.dream-home-shell) article,
+html.codex-dream-skin.dream-art-wide:is(.dream-task-chrome-auto, .dream-task-chrome-all, .dream-task-chrome-content):is(.dream-task-ambient, .dream-task-banner)
+  main.main-surface:not(.dream-home-shell) [data-message-author-role],
+html.codex-dream-skin.dream-art-wide:is(.dream-task-chrome-auto, .dream-task-chrome-all, .dream-task-chrome-content):is(.dream-task-ambient, .dream-task-banner)
+  main.main-surface:not(.dream-home-shell) [class~="bg-token-main-surface-primary"]:not([class~="h-full"]),
+html.codex-dream-skin.dream-art-wide:is(.dream-task-chrome-auto, .dream-task-chrome-all, .dream-task-chrome-content):is(.dream-task-ambient, .dream-task-banner)
+  main.main-surface:not(.dream-home-shell) [class~="bg-token-main-surface-secondary"] {
+  background-color: var(--dream-task-mask-soft) !important;
+}
+
+html.codex-dream-skin.dream-art-wide.dream-task-chrome-none:is(.dream-task-ambient, .dream-task-banner)
+  aside.app-shell-left-panel,
 html.codex-dream-skin.dream-art-wide.dream-task-chrome-none:is(.dream-task-ambient, .dream-task-banner)
   main.main-surface:not(.dream-home-shell),
 html.codex-dream-skin.dream-art-wide.dream-task-chrome-top:is(.dream-task-ambient, .dream-task-banner)
+  aside.app-shell-left-panel,
+html.codex-dream-skin.dream-art-wide.dream-task-chrome-top:is(.dream-task-ambient, .dream-task-banner)
   main.main-surface:not(.dream-home-shell),
+html.codex-dream-skin.dream-art-wide.dream-task-chrome-bottom:is(.dream-task-ambient, .dream-task-banner)
+  aside.app-shell-left-panel,
 html.codex-dream-skin.dream-art-wide.dream-task-chrome-bottom:is(.dream-task-ambient, .dream-task-banner)
   main.main-surface:not(.dream-home-shell) {
   background: transparent !important;

@@ -663,6 +663,34 @@ function ConvertTo-ProcessArgument {
   return '"' + $escaped + '"'
 }
 
+function Read-SharedTextFile {
+  param([Parameter(Mandatory = $true)][string]$Path)
+  if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return '' }
+  $deadline = (Get-Date).AddSeconds(3)
+  $lastError = $null
+  do {
+    try {
+      $stream = [System.IO.File]::Open(
+        $Path,
+        [System.IO.FileMode]::Open,
+        [System.IO.FileAccess]::Read,
+        [System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete
+      )
+      try {
+        $reader = New-Object System.IO.StreamReader($stream, [System.Text.Encoding]::UTF8, $true)
+        try { return $reader.ReadToEnd().Trim() } finally { $reader.Dispose() }
+      } finally {
+        if ($stream) { $stream.Dispose() }
+      }
+    } catch {
+      $lastError = $_
+      Start-Sleep -Milliseconds 120
+      [System.Windows.Forms.Application]::DoEvents()
+    }
+  } while ((Get-Date) -lt $deadline)
+  throw $lastError
+}
+
 function Invoke-ScriptProcess {
   param(
     [Parameter(Mandatory = $true)][string]$ScriptPath,
@@ -697,8 +725,8 @@ function Invoke-ScriptProcess {
   [void]$process.WaitForExit(1000)
   $process.Refresh()
 
-  $stdout = if (Test-Path -LiteralPath $stdoutPath) { [System.IO.File]::ReadAllText($stdoutPath, [System.Text.Encoding]::UTF8).Trim() } else { '' }
-  $stderr = if (Test-Path -LiteralPath $stderrPath) { [System.IO.File]::ReadAllText($stderrPath, [System.Text.Encoding]::UTF8).Trim() } else { '' }
+  $stdout = Read-SharedTextFile -Path $stdoutPath
+  $stderr = Read-SharedTextFile -Path $stderrPath
   $exitCode = if ($null -ne $process.ExitCode) { [int]$process.ExitCode } elseif ($stderr) { 1 } else { 0 }
   $content = @(
     "Time: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')",
