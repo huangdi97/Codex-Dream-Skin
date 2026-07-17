@@ -2,11 +2,11 @@ Codex Dream Skin adaptive theme format
 
 Easiest way:
 
-  Open the one-click manager, click "一键制作主题", enter a theme name, and
-  choose control colors, font, text color, appearance, home text mask,
-  task-page mask, and one PNG/JPG/JPEG/WEBP image. The one-click maker
-  compresses the image to a stable JPG theme asset and opens a verification
-  screenshot after apply.
+  Open the one-click manager, click "Make theme", enter a theme name, then
+  choose control color, font or font file, text color, appearance, home text
+  mask, task background mode, task control mask, and one PNG/JPG/JPEG/WEBP
+  image. The one-click maker compresses the image to a stable JPG theme asset
+  and opens a verification screenshot after apply.
 
 The generated theme folder is saved under:
 
@@ -16,12 +16,14 @@ A theme is one folder containing:
 
   theme.json
   one image file referenced by theme.json
+  optional font file referenced by theme.json
 
 Example:
 
   arina-theme\
     theme.json
     arina.jpg
+    font.ttf
 
 Minimal theme.json:
 
@@ -35,7 +37,8 @@ Minimal theme.json:
     "focusX": 0.5,
     "focusY": 0.42,
     "safeArea": "auto",
-    "taskMode": "auto"
+    "taskMode": "auto",
+    "taskChrome": "auto"
   },
   "palette": {
     "accent": "#d86b8d",
@@ -43,7 +46,8 @@ Minimal theme.json:
     "textMuted": "#665b6b"
   },
   "typography": {
-    "fontFamily": "\"Microsoft YaHei UI\", \"Microsoft YaHei\", sans-serif"
+    "fontFamily": "\"Microsoft YaHei UI\", \"Microsoft YaHei\", sans-serif",
+    "fontFile": "font.ttf"
   }
 }
 
@@ -57,18 +61,24 @@ Rules:
   center, or none.
 - taskMode controls whether the task/chat page shows the image: auto, ambient,
   banner, or off.
+- taskChrome controls task-page readability surfaces: auto, all, content, top,
+  bottom, or none.
 - palette.accent can be any CSS hex color, such as #d86b8d.
 - palette.text and palette.textMuted can override text colors.
 - typography.fontFamily can override the UI font stack.
+- typography.fontFile can reference a TTF, OTF, WOFF, or WOFF2 file in the same
+  theme folder. Font files must be under 16 MB.
 
 Seller workflow for a requested person/character:
-1. Use "一键制作主题".
+1. Use "Make theme".
 2. Enter a theme name and select one image.
-3. Find the generated folder under outputs\themes.
-4. Send that generated folder to the buyer, or import it with "主题库 / 导入主题".
-5. If needed, adjust theme.json fields such as name, appearance,
+3. Optionally select a custom font file.
+4. Find the generated folder under outputs\themes.
+5. Send that generated folder to the buyer, or import it with the theme library.
+6. If needed, adjust theme.json fields such as name, appearance,
    palette.accent, palette.text, palette.textMuted, typography.fontFamily,
-   art.focusX, art.focusY, art.safeArea, and art.taskMode.
+   typography.fontFile, art.focusX, art.focusY, art.safeArea, art.taskMode,
+   and art.taskChrome.
 
 The old control preset format with dream-controls.css, dream-reference.png,
 dream-background.png, and dream-palette.css is no longer used by this package.

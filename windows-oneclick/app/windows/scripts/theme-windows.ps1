@@ -3,6 +3,7 @@
 }
 
 $script:DreamSkinMaxImageBytes = 16 * 1024 * 1024
+$script:DreamSkinMaxFontBytes = 16 * 1024 * 1024
 
 function Assert-DreamSkinNoReparseComponents {
   param([Parameter(Mandatory = $true)][string]$Path)
@@ -89,6 +90,23 @@ function Assert-DreamSkinImageFile {
   }
 }
 
+function Assert-DreamSkinFontFile {
+  param([Parameter(Mandatory = $true)][string]$Path)
+  $fullPath = [System.IO.Path]::GetFullPath($Path)
+  if (-not (Test-Path -LiteralPath $fullPath -PathType Leaf)) {
+    throw "Font does not exist: $fullPath"
+  }
+  $extension = [System.IO.Path]::GetExtension($fullPath).ToLowerInvariant()
+  if ($extension -notin @('.ttf', '.otf', '.woff', '.woff2')) {
+    throw "Unsupported font format: $extension"
+  }
+  $length = (Get-Item -LiteralPath $fullPath -Force).Length
+  if ($length -lt 1) { throw 'Theme font cannot be empty.' }
+  if ($length -gt $script:DreamSkinMaxFontBytes) {
+    throw 'Theme font exceeds the 16 MB limit.'
+  }
+}
+
 function Get-DreamSkinThemePaths {
   param([string]$StateRoot = (Join-Path $env:LOCALAPPDATA 'CodexDreamSkin'))
   $fullRoot = [System.IO.Path]::GetFullPath($StateRoot)
@@ -161,10 +179,22 @@ function Read-DreamSkinTheme {
     throw 'Theme image must remain inside its theme directory and exist.'
   }
   Assert-DreamSkinImageFile -Path $imagePath -SkipImageMetadata:$SkipImageMetadata
+  $fontPath = $null
+  if ($theme.typography -and $theme.typography.fontFile) {
+    $font = "$($theme.typography.fontFile)"
+    if ([System.IO.Path]::IsPathRooted($font)) { throw 'Theme font path must be relative.' }
+    $fontPath = [System.IO.Path]::GetFullPath((Join-Path $directory $font))
+    if (-not (Test-DreamSkinThemePathWithin -Path $fontPath -Root $directory) -or
+      -not (Test-Path -LiteralPath $fontPath -PathType Leaf)) {
+      throw 'Theme font must remain inside its theme directory and exist.'
+    }
+    Assert-DreamSkinFontFile -Path $fontPath
+  }
   return [pscustomobject]@{
     Directory = $directory
     ThemePath = $themePath
     ImagePath = $imagePath
+    FontPath = $fontPath
     Theme = $theme
   }
 }
@@ -244,6 +274,7 @@ function Set-DreamSkinActiveTheme {
     [Parameter(Mandatory = $true)][string]$ImagePath,
     [AllowNull()][object]$Theme,
     [string]$Name,
+    [AllowNull()][string]$FontPath,
     [string]$StateRoot = (Join-Path $env:LOCALAPPDATA 'CodexDreamSkin')
   )
   $paths = Get-DreamSkinThemePaths -StateRoot $StateRoot
@@ -254,13 +285,15 @@ function Set-DreamSkinActiveTheme {
   Assert-DreamSkinImageFile -Path $source
   $extension = [System.IO.Path]::GetExtension($source).ToLowerInvariant()
   $oldImage = $null
+  $oldFont = $null
   try { $oldImage = (Read-DreamSkinTheme -ThemeDirectory $paths.Active).ImagePath } catch {}
+  try { $oldFont = (Read-DreamSkinTheme -ThemeDirectory $paths.Active).FontPath } catch {}
   if ($null -eq $Theme) {
     $Theme = [pscustomobject]@{
       id = 'custom'
       name = '自定义主题'
       appearance = 'auto'
-      art = [pscustomobject]@{ focusX = $null; focusY = $null; safeArea = 'auto'; taskMode = 'auto' }
+      art = [pscustomobject]@{ focusX = $null; focusY = $null; safeArea = 'auto'; taskMode = 'auto'; taskChrome = 'auto' }
       palette = [pscustomobject]@{}
     }
   }
@@ -282,19 +315,52 @@ function Set-DreamSkinActiveTheme {
     if (-not $Theme.appearance) { $Theme | Add-Member -NotePropertyName appearance -NotePropertyValue 'auto' -Force }
     if (-not $Theme.art) {
       $Theme | Add-Member -NotePropertyName art -NotePropertyValue `
-        ([pscustomobject]@{ focusX = $null; focusY = $null; safeArea = 'auto'; taskMode = 'auto' }) -Force
+        ([pscustomobject]@{ focusX = $null; focusY = $null; safeArea = 'auto'; taskMode = 'auto'; taskChrome = 'auto' }) -Force
     }
     if (-not $Theme.palette) {
       $Theme | Add-Member -NotePropertyName palette -NotePropertyValue ([pscustomobject]@{}) -Force
     }
+    if (-not $FontPath -and $Theme.typography -and $Theme.typography.fontFile) {
+      $candidateFont = Join-Path ([System.IO.Path]::GetDirectoryName($source)) "$($Theme.typography.fontFile)"
+      if (Test-Path -LiteralPath $candidateFont -PathType Leaf) { $FontPath = $candidateFont }
+    }
+    if ($FontPath) {
+      $fontSource = [System.IO.Path]::GetFullPath($FontPath)
+      Assert-DreamSkinFontFile -Path $fontSource
+      $fontExtension = [System.IO.Path]::GetExtension($fontSource).ToLowerInvariant()
+      $fontName = 'font' + $fontExtension
+      $fontTarget = Join-Path $paths.Active $fontName
+      $fontTemporary = Join-Path $paths.Active ('.dream-tmp-' + [guid]::NewGuid().ToString('N') + $fontExtension)
+      Assert-DreamSkinNoReparseComponents -Path $fontTarget
+      Assert-DreamSkinNoReparseComponents -Path $fontTemporary
+      Copy-Item -LiteralPath $fontSource -Destination $fontTemporary -Force
+      Assert-DreamSkinNoReparseComponents -Path $fontTemporary
+      Assert-DreamSkinFontFile -Path $fontTemporary
+      Move-Item -LiteralPath $fontTemporary -Destination $fontTarget -Force
+      Assert-DreamSkinNoReparseComponents -Path $fontTarget
+      Assert-DreamSkinFontFile -Path $fontTarget
+      if (-not $Theme.typography) {
+        $Theme | Add-Member -NotePropertyName typography -NotePropertyValue ([pscustomobject]@{}) -Force
+      }
+      $Theme.typography | Add-Member -NotePropertyName fontFile -NotePropertyValue $fontName -Force
+    } elseif ($Theme.typography -and $Theme.typography.fontFile) {
+      $Theme.typography.PSObject.Properties.Remove('fontFile')
+    }
     Write-DreamSkinTheme -ThemeDirectory $paths.Active -Theme $Theme
   } finally {
     Remove-Item -LiteralPath $temporary -Force -ErrorAction SilentlyContinue
+    if ($fontTemporary) { Remove-Item -LiteralPath $fontTemporary -Force -ErrorAction SilentlyContinue }
   }
   $sameImage = $oldImage -and ([System.IO.Path]::GetFullPath($oldImage) -ieq [System.IO.Path]::GetFullPath($target))
   if ($oldImage -and -not $sameImage -and
     (Test-DreamSkinThemePathWithin -Path $oldImage -Root $paths.Active)) {
     Remove-Item -LiteralPath $oldImage -Force -ErrorAction SilentlyContinue
+  }
+  if ($oldFont -and (Test-DreamSkinThemePathWithin -Path $oldFont -Root $paths.Active)) {
+    $currentFont = $null
+    try { $currentFont = (Read-DreamSkinTheme -ThemeDirectory $paths.Active).FontPath } catch {}
+    $sameFont = $currentFont -and ([System.IO.Path]::GetFullPath($oldFont) -ieq [System.IO.Path]::GetFullPath($currentFont))
+    if (-not $sameFont) { Remove-Item -LiteralPath $oldFont -Force -ErrorAction SilentlyContinue }
   }
   $imageArchive = Join-Path $paths.Images $imageName
   Assert-DreamSkinNoReparseComponents -Path $imageArchive
@@ -331,6 +397,19 @@ function Save-DreamSkinCurrentTheme {
   $theme.id = $id
   $theme.name = $trimmed
   $theme.image = $imageName
+  if ($active.FontPath) {
+    $fontExtension = [System.IO.Path]::GetExtension($active.FontPath).ToLowerInvariant()
+    $fontName = 'font' + $fontExtension
+    $destinationFont = Join-Path $destination $fontName
+    Assert-DreamSkinNoReparseComponents -Path $destinationFont
+    Copy-Item -LiteralPath $active.FontPath -Destination $destinationFont -Force
+    Assert-DreamSkinNoReparseComponents -Path $destinationFont
+    Assert-DreamSkinFontFile -Path $destinationFont
+    if (-not $theme.typography) {
+      $theme | Add-Member -NotePropertyName typography -NotePropertyValue ([pscustomobject]@{}) -Force
+    }
+    $theme.typography | Add-Member -NotePropertyName fontFile -NotePropertyValue $fontName -Force
+  }
   Write-DreamSkinTheme -ThemeDirectory $destination -Theme $theme
   return Read-DreamSkinTheme -ThemeDirectory $destination
 }
@@ -372,7 +451,7 @@ function Use-DreamSkinSavedTheme {
   }
   $saved = Read-DreamSkinTheme -ThemeDirectory $directory
   $theme = $saved.Theme | ConvertTo-Json -Depth 8 | ConvertFrom-Json
-  return Set-DreamSkinActiveTheme -ImagePath $saved.ImagePath -Theme $theme -StateRoot $StateRoot
+  return Set-DreamSkinActiveTheme -ImagePath $saved.ImagePath -Theme $theme -FontPath $saved.FontPath -StateRoot $StateRoot
 }
 
 function Set-DreamSkinPaused {

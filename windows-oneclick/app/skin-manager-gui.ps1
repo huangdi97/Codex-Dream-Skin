@@ -98,7 +98,7 @@ function Import-ExplicitTheme {
   $paths = Initialize-OneClickThemeStore
   $loaded = Read-DreamSkinTheme -ThemeDirectory $ThemeDir
   $theme = $loaded.Theme | ConvertTo-Json -Depth 8 | ConvertFrom-Json
-  $active = Set-DreamSkinActiveTheme -ImagePath $loaded.ImagePath -Theme $theme -StateRoot $paths.Root
+  $active = Set-DreamSkinActiveTheme -ImagePath $loaded.ImagePath -Theme $theme -FontPath $loaded.FontPath -StateRoot $paths.Root
   return "Theme applied: $($active.Theme.name). If Codex is running, it will update shortly; otherwise start Dream Skin."
 }
 
@@ -240,7 +240,7 @@ function Show-ThemeOptionsDialog {
   $dialog = New-Object System.Windows.Forms.Form
   $dialog.Text = '制作主题'
   $dialog.StartPosition = 'CenterParent'
-  $dialog.ClientSize = New-Object System.Drawing.Size(460, 430)
+  $dialog.ClientSize = New-Object System.Drawing.Size(460, 510)
   $dialog.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
   $dialog.MaximizeBox = $false
   $dialog.MinimizeBox = $false
@@ -322,7 +322,7 @@ function Show-ThemeOptionsDialog {
   $dialog.Controls.Add($safeBox)
 
   $taskLabel = New-Object System.Windows.Forms.Label
-  $taskLabel.Text = '任务页面遮罩'
+  $taskLabel.Text = '任务背景'
   $taskLabel.Location = New-Object System.Drawing.Point(18, 178)
   $taskLabel.Size = New-Object System.Drawing.Size(110, 24)
   $dialog.Controls.Add($taskLabel)
@@ -341,21 +341,44 @@ function Show-ThemeOptionsDialog {
   $taskBox.SelectedIndex = 0
   $dialog.Controls.Add($taskBox)
 
+  $taskChromeLabel = New-Object System.Windows.Forms.Label
+  $taskChromeLabel.Text = '任务控件遮罩'
+  $taskChromeLabel.Location = New-Object System.Drawing.Point(18, 218)
+  $taskChromeLabel.Size = New-Object System.Drawing.Size(110, 24)
+  $dialog.Controls.Add($taskChromeLabel)
+
+  $taskChromeBox = New-Object System.Windows.Forms.ComboBox
+  $taskChromeBox.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDownList
+  $taskChromeBox.Location = New-Object System.Drawing.Point(140, 216)
+  $taskChromeBox.Size = New-Object System.Drawing.Size(292, 24)
+  foreach ($option in @(
+    [pscustomobject]@{ Label = '智能默认'; Value = 'auto' },
+    [pscustomobject]@{ Label = '顶部 + 内容 + 输入区'; Value = 'all' },
+    [pscustomobject]@{ Label = '只保留内容遮罩'; Value = 'content' },
+    [pscustomobject]@{ Label = '只保留顶部栏遮罩'; Value = 'top' },
+    [pscustomobject]@{ Label = '只保留输入区遮罩'; Value = 'bottom' },
+    [pscustomobject]@{ Label = '尽量透明'; Value = 'none' }
+  )) { [void]$taskChromeBox.Items.Add($option) }
+  $taskChromeBox.DisplayMember = 'Label'
+  $taskChromeBox.SelectedIndex = 0
+  $dialog.Controls.Add($taskChromeBox)
+
   $fontLabel = New-Object System.Windows.Forms.Label
   $fontLabel.Text = '字体'
-  $fontLabel.Location = New-Object System.Drawing.Point(18, 218)
+  $fontLabel.Location = New-Object System.Drawing.Point(18, 258)
   $fontLabel.Size = New-Object System.Drawing.Size(110, 24)
   $dialog.Controls.Add($fontLabel)
 
   $fontBox = New-Object System.Windows.Forms.ComboBox
   $fontBox.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDownList
-  $fontBox.Location = New-Object System.Drawing.Point(140, 216)
+  $fontBox.Location = New-Object System.Drawing.Point(140, 256)
   $fontBox.Size = New-Object System.Drawing.Size(292, 24)
   foreach ($option in @(
-    [pscustomobject]@{ Label = '默认现代字体'; Value = '"Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif' },
-    [pscustomobject]@{ Label = '微软雅黑'; Value = '"Microsoft YaHei UI", "Microsoft YaHei", sans-serif' },
-    [pscustomobject]@{ Label = '等线 / 简洁'; Value = 'DengXian, "Microsoft YaHei UI", sans-serif' },
-    [pscustomobject]@{ Label = '代码感'; Value = '"Cascadia Code", "Microsoft YaHei UI", monospace' }
+    [pscustomobject]@{ Label = '默认现代字体'; Value = '"Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif'; CustomFile = $false },
+    [pscustomobject]@{ Label = '微软雅黑'; Value = '"Microsoft YaHei UI", "Microsoft YaHei", sans-serif'; CustomFile = $false },
+    [pscustomobject]@{ Label = '等线 / 简洁'; Value = 'DengXian, "Microsoft YaHei UI", sans-serif'; CustomFile = $false },
+    [pscustomobject]@{ Label = '代码感'; Value = '"Cascadia Code", "Microsoft YaHei UI", monospace'; CustomFile = $false },
+    [pscustomobject]@{ Label = '选择字体文件 TTF/OTF/WOFF'; Value = '"Codex Dream Theme Font", "Microsoft YaHei UI", system-ui, sans-serif'; CustomFile = $true }
   )) { [void]$fontBox.Items.Add($option) }
   $fontBox.DisplayMember = 'Label'
   $fontBox.SelectedIndex = 0
@@ -363,13 +386,13 @@ function Show-ThemeOptionsDialog {
 
   $textColorLabel = New-Object System.Windows.Forms.Label
   $textColorLabel.Text = '字体颜色'
-  $textColorLabel.Location = New-Object System.Drawing.Point(18, 258)
+  $textColorLabel.Location = New-Object System.Drawing.Point(18, 298)
   $textColorLabel.Size = New-Object System.Drawing.Size(110, 24)
   $dialog.Controls.Add($textColorLabel)
 
   $textColorBox = New-Object System.Windows.Forms.ComboBox
   $textColorBox.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDownList
-  $textColorBox.Location = New-Object System.Drawing.Point(140, 256)
+  $textColorBox.Location = New-Object System.Drawing.Point(140, 296)
   $textColorBox.Size = New-Object System.Drawing.Size(292, 24)
   foreach ($option in @(
     [pscustomobject]@{ Label = '自动'; Text = $null; Muted = $null },
@@ -383,21 +406,21 @@ function Show-ThemeOptionsDialog {
   $dialog.Controls.Add($textColorBox)
 
   $note = New-Object System.Windows.Forms.Label
-  $note.Text = '提示：控件配色会影响按钮、输入框、侧边栏等；任务页面遮罩控制聊天/任务页面是否显示背景图。'
-  $note.Location = New-Object System.Drawing.Point(18, 300)
-  $note.Size = New-Object System.Drawing.Size(414, 42)
+  $note.Text = '提示：任务背景控制是否显示背景图；任务控件遮罩控制顶部栏、内容区和输入区的半透明底色。'
+  $note.Location = New-Object System.Drawing.Point(18, 340)
+  $note.Size = New-Object System.Drawing.Size(414, 58)
   $dialog.Controls.Add($note)
 
   $ok = New-Object System.Windows.Forms.Button
   $ok.Text = '下一步'
-  $ok.Location = New-Object System.Drawing.Point(270, 378)
+  $ok.Location = New-Object System.Drawing.Point(270, 458)
   $ok.Size = New-Object System.Drawing.Size(78, 32)
   $dialog.AcceptButton = $ok
   $dialog.Controls.Add($ok)
 
   $cancel = New-Object System.Windows.Forms.Button
   $cancel.Text = '取消'
-  $cancel.Location = New-Object System.Drawing.Point(354, 378)
+  $cancel.Location = New-Object System.Drawing.Point(354, 458)
   $cancel.Size = New-Object System.Drawing.Size(78, 32)
   $dialog.CancelButton = $cancel
   $dialog.Controls.Add($cancel)
@@ -415,7 +438,9 @@ function Show-ThemeOptionsDialog {
       Appearance = $appearanceBox.SelectedItem.Value
       SafeArea = $safeBox.SelectedItem.Value
       TaskMode = $taskBox.SelectedItem.Value
+      TaskChrome = $taskChromeBox.SelectedItem.Value
       FontFamily = $fontBox.SelectedItem.Value
+      FontFileRequested = [bool]$fontBox.SelectedItem.CustomFile
       TextColor = $textColorBox.SelectedItem.Text
       MutedTextColor = $textColorBox.SelectedItem.Muted
     }
@@ -440,6 +465,21 @@ function New-OneClickTheme {
   if ($dialog.ShowDialog($form) -ne [System.Windows.Forms.DialogResult]::OK) { return $Text.cancelled }
   if (-not (Show-ThemeImagePreview -ImagePath $dialog.FileName -ThemeName $name)) { return $Text.cancelled }
 
+  $fontSourcePath = $null
+  if ($options.FontFileRequested) {
+    $fontDialog = New-Object System.Windows.Forms.OpenFileDialog
+    $fontDialog.Title = '选择字体文件'
+    $fontDialog.Filter = 'Font files (*.ttf;*.otf;*.woff;*.woff2)|*.ttf;*.otf;*.woff;*.woff2'
+    $fontDialog.Multiselect = $false
+    try {
+      if ($fontDialog.ShowDialog($form) -ne [System.Windows.Forms.DialogResult]::OK) { return $Text.cancelled }
+      Assert-DreamSkinFontFile -Path $fontDialog.FileName
+      $fontSourcePath = $fontDialog.FileName
+    } finally {
+      $fontDialog.Dispose()
+    }
+  }
+
   $paths = Initialize-OneClickThemeStore
   Assert-DreamSkinImageFile -Path $dialog.FileName
 
@@ -453,6 +493,15 @@ function New-OneClickTheme {
   $imageName = 'art.jpg'
   $imagePath = Join-Path $themeDir $imageName
   Save-ThemeImage -SourcePath $dialog.FileName -DestinationPath $imagePath
+
+  $fontFileName = $null
+  $fontPath = $null
+  if ($fontSourcePath) {
+    $fontFileName = 'font' + [System.IO.Path]::GetExtension($fontSourcePath).ToLowerInvariant()
+    $fontPath = Join-Path $themeDir $fontFileName
+    Copy-Item -LiteralPath $fontSourcePath -Destination $fontPath -Force
+    Assert-DreamSkinFontFile -Path $fontPath
+  }
 
   $accent = if ($options.Accent) { $options.Accent } else { Get-ImageAccentHex -ImagePath $imagePath }
   $theme = [ordered]@{
@@ -470,6 +519,7 @@ function New-OneClickTheme {
       focusY = 0.42
       safeArea = $options.SafeArea
       taskMode = $options.TaskMode
+      taskChrome = $options.TaskChrome
     }
     palette = [ordered]@{
       accent = $accent
@@ -478,12 +528,13 @@ function New-OneClickTheme {
       fontFamily = $options.FontFamily
     }
   }
+  if ($fontFileName) { $theme.typography.fontFile = $fontFileName }
   if ($options.TextColor) { $theme.palette.text = $options.TextColor }
   if ($options.MutedTextColor) { $theme.palette.textMuted = $options.MutedTextColor }
   Write-DreamSkinTheme -ThemeDirectory $themeDir -Theme ([pscustomobject]$theme)
   $loaded = Read-DreamSkinTheme -ThemeDirectory $themeDir
   $activeTheme = $loaded.Theme | ConvertTo-Json -Depth 8 | ConvertFrom-Json
-  $active = Set-DreamSkinActiveTheme -ImagePath $loaded.ImagePath -Theme $activeTheme -StateRoot $paths.Root
+  $active = Set-DreamSkinActiveTheme -ImagePath $loaded.ImagePath -Theme $activeTheme -FontPath $loaded.FontPath -StateRoot $paths.Root
   $null = Save-DreamSkinCurrentTheme -Name $name -StateRoot $paths.Root
   $restart = Restart-DreamSkinAfterThemeChange
   $previewPath = Join-Path $OutputsRoot ("theme-preview-" + (Get-Date -Format 'yyyyMMdd-HHmmss') + ".png")

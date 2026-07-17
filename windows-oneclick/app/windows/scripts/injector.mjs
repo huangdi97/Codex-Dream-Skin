@@ -279,6 +279,7 @@ const THEME_CHOICES = {
   appearance: new Set(["auto", "light", "dark"]),
   safeArea: new Set(["auto", "left", "right", "center", "none"]),
   taskMode: new Set(["auto", "ambient", "banner", "off"]),
+  taskChrome: new Set(["auto", "all", "content", "top", "bottom", "none"]),
 };
 
 function normalizedUnit(value, name) {
@@ -322,10 +323,29 @@ function normalizedCssFontFamily(value, name) {
   return fontFamily;
 }
 
+function normalizedRelativeAsset(value, name, maxLength = 240) {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const asset = value.trim();
+  if (asset.length > maxLength || path.isAbsolute(asset) || /[\u0000-\u001f]/.test(asset)) {
+    throw new Error(`${name} must be a safe relative path`);
+  }
+  return asset;
+}
+
+function fontMimeForExtension(extension) {
+  switch (extension) {
+    case ".ttf": return "font/ttf";
+    case ".otf": return "font/otf";
+    case ".woff": return "font/woff";
+    case ".woff2": return "font/woff2";
+    default: return null;
+  }
+}
+
 async function loadTheme(themeDir) {
   const realThemeDir = await fs.realpath(themeDir);
   const themePath = path.join(realThemeDir, "theme.json");
-  const themeText = await fs.readFile(themePath, "utf8");
+  const themeText = (await fs.readFile(themePath, "utf8")).replace(/^\uFEFF/, "");
   const raw = JSON.parse(themeText);
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     throw new Error("Theme root must be an object");
@@ -361,6 +381,7 @@ async function loadTheme(themeDir) {
       focusY: normalizedUnit(art.focusY, "art.focusY"),
       safeArea: normalizedChoice(art.safeArea, "art.safeArea", THEME_CHOICES.safeArea, "auto"),
       taskMode: normalizedChoice(art.taskMode, "art.taskMode", THEME_CHOICES.taskMode, "auto"),
+      taskChrome: normalizedChoice(art.taskChrome, "art.taskChrome", THEME_CHOICES.taskChrome, "auto"),
     },
     palette: {},
   };
@@ -370,6 +391,36 @@ async function loadTheme(themeDir) {
   }
   const fontFamily = normalizedCssFontFamily(typography.fontFamily, "typography.fontFamily");
   if (fontFamily) theme.typography = { fontFamily };
+  const fontFile = normalizedRelativeAsset(typography.fontFile, "typography.fontFile");
+  let realFontPath = null;
+  let fontBytes = null;
+  let fontMime = null;
+  let fontStat = null;
+  if (fontFile) {
+    const fontPath = path.resolve(realThemeDir, fontFile);
+    const relativeFont = path.relative(realThemeDir, fontPath);
+    if (!relativeFont || relativeFont.startsWith("..") || path.isAbsolute(relativeFont)) {
+      throw new Error("Theme font must remain inside the selected theme directory");
+    }
+    const fontExtension = path.extname(fontPath).toLowerCase();
+    fontMime = fontMimeForExtension(fontExtension);
+    if (!fontMime) throw new Error(`Unsupported theme font format: ${fontExtension || "missing"}`);
+    realFontPath = await fs.realpath(fontPath);
+    const realRelativeFont = path.relative(realThemeDir, realFontPath);
+    if (!realRelativeFont || realRelativeFont.startsWith("..") || path.isAbsolute(realRelativeFont)) {
+      throw new Error("Theme font cannot escape through a link or junction");
+    }
+    fontStat = await fs.stat(realFontPath);
+    if (!fontStat.isFile()) throw new Error("Theme font is not a file");
+    if (fontStat.size < 1) throw new Error("Theme font cannot be empty");
+    if (fontStat.size > MAX_ART_BYTES) throw new Error("Theme font exceeds the 16 MB limit");
+    fontBytes = await fs.readFile(realFontPath);
+    if (fontBytes.length < 1 || fontBytes.length > MAX_ART_BYTES) {
+      throw new Error("Theme font must be between 1 byte and 16 MB");
+    }
+    if (!theme.typography) theme.typography = {};
+    theme.typography.fontFile = fontFile;
+  }
   const [themeStat, imageStat] = await Promise.all([fs.stat(themePath), fs.stat(realImagePath)]);
   if (!imageStat.isFile()) throw new Error("Theme image is not a file");
   if (imageStat.size < 1) throw new Error("Theme image cannot be empty");
@@ -389,14 +440,20 @@ async function loadTheme(themeDir) {
     .update(themeText, "utf8")
     .update("\0")
     .update(imageBytes)
+    .update("\0")
+    .update(fontBytes ?? Buffer.alloc(0))
     .digest("hex");
   return {
     theme,
     themePath,
     imagePath: realImagePath,
     imageBytes,
+    fontPath: realFontPath,
+    fontBytes,
+    fontMime,
     fingerprint,
-    sourceStamp: `${themeStat.size}:${themeStat.mtimeMs}:${imageStat.size}:${imageStat.mtimeMs}`,
+    sourceStamp: `${themeStat.size}:${themeStat.mtimeMs}:${imageStat.size}:${imageStat.mtimeMs}:` +
+      `${fontStat?.size ?? 0}:${fontStat?.mtimeMs ?? 0}`,
   };
 }
 
@@ -410,11 +467,18 @@ async function loadPayload(themeDir = path.join(root, "assets"), candidateTheme 
   const mime = extension === ".jpg" || extension === ".jpeg" ? "image/jpeg"
     : extension === ".webp" ? "image/webp" : "image/png";
   const artDataUrl = `data:${mime};base64,${loadedTheme.imageBytes.toString("base64")}`;
+  const fontData = loadedTheme.fontBytes
+    ? {
+      family: "Codex Dream Theme Font",
+      url: `data:${loadedTheme.fontMime};base64,${loadedTheme.fontBytes.toString("base64")}`,
+    }
+    : null;
   const payload = template
     .replace("__DREAM_CSS_JSON__", JSON.stringify(css))
     .replace("__DREAM_ART_JSON__", JSON.stringify(artDataUrl))
+    .replace("__DREAM_FONT_JSON__", JSON.stringify(fontData))
     .replace("__DREAM_THEME_JSON__", JSON.stringify(loadedTheme.theme));
-  const { imageBytes: _imageBytes, ...themeState } = loadedTheme;
+  const { imageBytes: _imageBytes, fontBytes: _fontBytes, ...themeState } = loadedTheme;
   return { ...themeState, payload };
 }
 
@@ -433,7 +497,12 @@ async function readThemeSourceStamp(loadedTheme) {
     fs.stat(loadedTheme.themePath),
     fs.stat(loadedTheme.imagePath),
   ]);
-  return `${themeStat.size}:${themeStat.mtimeMs}:${imageStat.size}:${imageStat.mtimeMs}`;
+  let fontStamp = "0:0";
+  if (loadedTheme.fontPath) {
+    const fontStat = await fs.stat(loadedTheme.fontPath);
+    fontStamp = `${fontStat.size}:${fontStat.mtimeMs}`;
+  }
+  return `${themeStat.size}:${themeStat.mtimeMs}:${imageStat.size}:${imageStat.mtimeMs}:${fontStamp}`;
 }
 
 async function probeSession(session) {
@@ -561,11 +630,15 @@ async function removeFromSession(session) {
       'dream-art-wide', 'dream-art-standard', 'dream-focus-left',
       'dream-focus-center', 'dream-focus-right', 'dream-safe-left',
       'dream-safe-center', 'dream-safe-right', 'dream-safe-none',
-      'dream-task-ambient', 'dream-task-banner', 'dream-task-off'
+      'dream-task-ambient', 'dream-task-banner', 'dream-task-off',
+      'dream-task-chrome-auto', 'dream-task-chrome-all', 'dream-task-chrome-content',
+      'dream-task-chrome-top', 'dream-task-chrome-bottom', 'dream-task-chrome-none'
     );
     for (const property of [
       '--dream-art', '--dream-art-position', '--dream-focus-x', '--dream-focus-y',
-      '--dream-accent', '--dream-accent-ink', '--dream-image-luma'
+      '--dream-accent', '--dream-accent-ink', '--dream-image-luma',
+      '--dream-text', '--dream-text-muted', '--dream-surface', '--dream-sidebar',
+      '--dream-font-family'
     ]) document.documentElement?.style.removeProperty(property);
     document.querySelectorAll('.dream-home').forEach((node) => node.classList.remove('dream-home'));
     document.querySelectorAll('.dream-task').forEach((node) => node.classList.remove('dream-task'));

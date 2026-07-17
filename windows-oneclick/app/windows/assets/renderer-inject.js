@@ -1,4 +1,4 @@
-((cssText, artDataUrl, rawConfig) => {
+((cssText, artDataUrl, fontData, rawConfig) => {
   const STATE_KEY = "__CODEX_DREAM_SKIN_STATE__";
   const STYLE_ID = "codex-dream-skin-style";
   const CHROME_ID = "codex-dream-skin-chrome";
@@ -18,6 +18,12 @@
     "dream-task-ambient",
     "dream-task-banner",
     "dream-task-off",
+    "dream-task-chrome-auto",
+    "dream-task-chrome-all",
+    "dream-task-chrome-content",
+    "dream-task-chrome-top",
+    "dream-task-chrome-bottom",
+    "dream-task-chrome-none",
   ];
   const ROOT_PROPERTIES = [
     "--dream-art",
@@ -84,11 +90,16 @@
     const taskMode = ["auto", "ambient", "banner", "off"].includes(art.taskMode)
       ? art.taskMode
       : "auto";
+    const taskChrome = ["auto", "all", "content", "top", "bottom", "none"].includes(art.taskChrome)
+      ? art.taskChrome
+      : "auto";
+    const embeddedFontFamily = fontData?.url && fontData?.family ? String(fontData.family) : "";
     const metadataRatio = Number(config?.artMetadata?.ratio);
     return {
       appearance,
       safeArea,
       taskMode,
+      taskChrome,
       focusX: hasNumber(art.focusX) ? clamp(art.focusX) : null,
       focusY: hasNumber(art.focusY) ? clamp(art.focusY) : null,
       accent: safeAccent,
@@ -96,9 +107,19 @@
       textMuted: safeColor(typeof palette.textMuted === "string" ? palette.textMuted.trim() : ""),
       surface: safeColor(typeof palette.surface === "string" ? palette.surface.trim() : ""),
       sidebar: safeColor(typeof palette.sidebar === "string" ? palette.sidebar.trim() : ""),
-      fontFamily,
+      fontFamily: embeddedFontFamily
+        ? `"${embeddedFontFamily}", ${fontFamily || '"Microsoft YaHei UI", system-ui, sans-serif'}`
+        : fontFamily,
       initialAspect: Number.isFinite(metadataRatio) && metadataRatio > 0 ? metadataRatio : null,
     };
+  };
+
+  const composeCssText = () => {
+    if (!fontData?.url || !fontData?.family) return cssText;
+    const family = String(fontData.family).replace(/["\\]/g, "");
+    const url = String(fontData.url);
+    if (!/^data:font\/(?:ttf|otf|woff2?);base64,[a-z0-9+/=]+$/i.test(url)) return cssText;
+    return `@font-face{font-family:"${family}";src:url("${url}");font-display:swap;}\n${cssText}`;
   };
 
   const previous = window[STATE_KEY];
@@ -121,7 +142,7 @@
   };
   const existingStyle = document.getElementById(STYLE_ID);
   if (existingStyle) {
-    existingStyle.textContent = cssText;
+    existingStyle.textContent = composeCssText();
     existingStyle.dataset.dreamVersion = "3";
   }
 
@@ -313,6 +334,7 @@
     const taskMode = config.taskMode === "auto"
       ? profile.aspect >= 2.25 ? "banner" : "ambient"
       : config.taskMode;
+    const taskChrome = config.taskChrome === "auto" ? "auto" : config.taskChrome;
     const accent = config.accent || `rgb(${profile.accent.join(" ")})`;
     const accentInk = luminance(...profile.accent) > .42 ? "rgb(26 24 28)" : "rgb(250 248 251)";
     root.classList.toggle("dream-theme-light", appearance === "light");
@@ -327,6 +349,9 @@
     }
     for (const value of ["ambient", "banner", "off"]) {
       root.classList.toggle(`dream-task-${value}`, taskMode === value);
+    }
+    for (const value of ["auto", "all", "content", "top", "bottom", "none"]) {
+      root.classList.toggle(`dream-task-chrome-${value}`, taskChrome === value);
     }
     root.style.setProperty("--dream-art", `url("${artUrl}")`);
     root.style.setProperty("--dream-art-position", `${Math.round(focusX * 100)}% ${Math.round(focusY * 100)}%`);
@@ -364,7 +389,7 @@
       (document.head || root).appendChild(style);
     }
     if (style.dataset.dreamVersion !== "3") {
-      style.textContent = cssText;
+      style.textContent = composeCssText();
       style.dataset.dreamVersion = "3";
     }
 
@@ -435,4 +460,4 @@
     ensure();
   });
   return { installed: true, version: "1.2.0", adaptive: true };
-})(__DREAM_CSS_JSON__, __DREAM_ART_JSON__, __DREAM_THEME_JSON__)
+})(__DREAM_CSS_JSON__, __DREAM_ART_JSON__, __DREAM_FONT_JSON__, __DREAM_THEME_JSON__)

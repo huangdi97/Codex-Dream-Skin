@@ -260,11 +260,20 @@ function New-OneClickTheme {
     [pscustomobject]@{ Label = 'Top banner mask'; Value = 'banner' },
     [pscustomobject]@{ Label = 'Hide background image'; Value = 'off' }
   )
+  $taskChrome = Read-ThemeChoice -Title 'Task control mask' -Options @(
+    [pscustomobject]@{ Label = 'Auto'; Value = 'auto' },
+    [pscustomobject]@{ Label = 'Top + content + composer'; Value = 'all' },
+    [pscustomobject]@{ Label = 'Content only'; Value = 'content' },
+    [pscustomobject]@{ Label = 'Top bar only'; Value = 'top' },
+    [pscustomobject]@{ Label = 'Composer only'; Value = 'bottom' },
+    [pscustomobject]@{ Label = 'Mostly transparent'; Value = 'none' }
+  )
   $font = Read-ThemeChoice -Title 'Font' -Options @(
-    [pscustomobject]@{ Label = 'Modern default'; Value = '"Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif' },
-    [pscustomobject]@{ Label = 'Microsoft YaHei'; Value = '"Microsoft YaHei UI", "Microsoft YaHei", sans-serif' },
-    [pscustomobject]@{ Label = 'DengXian clean'; Value = 'DengXian, "Microsoft YaHei UI", sans-serif' },
-    [pscustomobject]@{ Label = 'Code style'; Value = '"Cascadia Code", "Microsoft YaHei UI", monospace' }
+    [pscustomobject]@{ Label = 'Modern default'; Value = '"Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif'; CustomFile = $false },
+    [pscustomobject]@{ Label = 'Microsoft YaHei'; Value = '"Microsoft YaHei UI", "Microsoft YaHei", sans-serif'; CustomFile = $false },
+    [pscustomobject]@{ Label = 'DengXian clean'; Value = 'DengXian, "Microsoft YaHei UI", sans-serif'; CustomFile = $false },
+    [pscustomobject]@{ Label = 'Code style'; Value = '"Cascadia Code", "Microsoft YaHei UI", monospace'; CustomFile = $false },
+    [pscustomobject]@{ Label = 'Custom TTF/OTF/WOFF file'; Value = '"Codex Dream Theme Font", "Microsoft YaHei UI", system-ui, sans-serif'; CustomFile = $true }
   )
   $textColor = Read-ThemeChoice -Title 'Text color' -Options @(
     [pscustomobject]@{ Label = 'Auto'; Text = $null; Muted = $null },
@@ -273,6 +282,17 @@ function New-OneClickTheme {
     [pscustomobject]@{ Label = 'Warm brown'; Text = '#3a2a1f'; Muted = '#7a6253' },
     [pscustomobject]@{ Label = 'Cool gray blue'; Text = '#dce8f2'; Muted = '#aebdca' }
   )
+  $fontSourcePath = $null
+  if ($font.CustomFile) {
+    Write-Host 'Paste a TTF, OTF, WOFF, or WOFF2 font path. Leave empty to cancel.'
+    $rawFont = Read-Host 'Font path'
+    $fontSourcePath = $rawFont.Trim().Trim('"')
+    if (-not $fontSourcePath) {
+      Write-Host 'Cancelled.'
+      return
+    }
+    Assert-DreamSkinFontFile -Path $fontSourcePath
+  }
 
   $paths = Initialize-OneClickThemeStore
   Assert-DreamSkinImageFile -Path $inputPath
@@ -286,6 +306,13 @@ function New-OneClickTheme {
   $imageName = 'art.jpg'
   $imagePath = Join-Path $themeDir $imageName
   Save-ThemeImage -SourcePath $inputPath -DestinationPath $imagePath
+  $fontFileName = $null
+  if ($fontSourcePath) {
+    $fontFileName = 'font' + [System.IO.Path]::GetExtension($fontSourcePath).ToLowerInvariant()
+    $fontPath = Join-Path $themeDir $fontFileName
+    Copy-Item -LiteralPath $fontSourcePath -Destination $fontPath -Force
+    Assert-DreamSkinFontFile -Path $fontPath
+  }
   $accent = if ($style.Accent) { $style.Accent } else { Get-ImageAccentHex -ImagePath $imagePath }
   $theme = [ordered]@{
     schemaVersion = 1
@@ -297,16 +324,17 @@ function New-OneClickTheme {
     tagline = "$name is ready."
     statusText = 'CUSTOM THEME ONLINE'
     quote = 'MAKE SOMETHING WONDERFUL'
-    art = [ordered]@{ focusX = 0.5; focusY = 0.42; safeArea = $safeArea.Value; taskMode = $taskMode.Value }
+    art = [ordered]@{ focusX = 0.5; focusY = 0.42; safeArea = $safeArea.Value; taskMode = $taskMode.Value; taskChrome = $taskChrome.Value }
     palette = [ordered]@{ accent = $accent }
     typography = [ordered]@{ fontFamily = $font.Value }
   }
+  if ($fontFileName) { $theme.typography.fontFile = $fontFileName }
   if ($textColor.Text) { $theme.palette.text = $textColor.Text }
   if ($textColor.Muted) { $theme.palette.textMuted = $textColor.Muted }
   Write-DreamSkinTheme -ThemeDirectory $themeDir -Theme ([pscustomobject]$theme)
   $loaded = Read-DreamSkinTheme -ThemeDirectory $themeDir
   $activeTheme = $loaded.Theme | ConvertTo-Json -Depth 8 | ConvertFrom-Json
-  $active = Set-DreamSkinActiveTheme -ImagePath $loaded.ImagePath -Theme $activeTheme -StateRoot $paths.Root
+  $active = Set-DreamSkinActiveTheme -ImagePath $loaded.ImagePath -Theme $activeTheme -FontPath $loaded.FontPath -StateRoot $paths.Root
   $null = Save-DreamSkinCurrentTheme -Name $name -StateRoot $paths.Root
   Write-Host "Theme created and applied: $($active.Theme.name)" -ForegroundColor Green
   Write-Host "Theme folder: $themeDir" -ForegroundColor Green
@@ -351,7 +379,7 @@ function Import-ExplicitTheme {
   $paths = Initialize-OneClickThemeStore
   $loaded = Read-DreamSkinTheme -ThemeDirectory $ThemeDir
   $theme = $loaded.Theme | ConvertTo-Json -Depth 8 | ConvertFrom-Json
-  $active = Set-DreamSkinActiveTheme -ImagePath $loaded.ImagePath -Theme $theme -StateRoot $paths.Root
+  $active = Set-DreamSkinActiveTheme -ImagePath $loaded.ImagePath -Theme $theme -FontPath $loaded.FontPath -StateRoot $paths.Root
   Write-Host "Theme applied: $($active.Theme.name). If Codex is running, it will update shortly; otherwise start Dream Skin." -ForegroundColor Green
 }
 

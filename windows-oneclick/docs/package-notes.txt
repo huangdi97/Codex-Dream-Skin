@@ -44,9 +44,13 @@ Compatibility changes applied to the packaged Windows copy:
 - The theme maker now previews the chosen image, compresses it to a smaller JPG
   theme asset, and opens a verification screenshot after applying the theme.
 - The theme maker now exposes control color, appearance, home readability mask,
-  and task-page background mask choices.
+  task-page background mode, and task-page control mask choices.
 - Theme JSON now supports typography.fontFamily, palette.text, and
   palette.textMuted for font and text color customization.
+- Theme JSON now supports typography.fontFile for bundled TTF/OTF/WOFF/WOFF2
+  font files inside a theme folder.
+- Theme JSON now supports art.taskChrome to control the top bar, content layer,
+  and composer/input mask independently on task pages.
 - The GUI no longer treats a blank PowerShell ExitCode with empty stderr as a
   failure, avoiding false "operation failed" messages after successful apply.
 - app/skin-manager.ps1 uses the same active-theme store as a fallback console
