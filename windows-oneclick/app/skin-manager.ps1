@@ -112,6 +112,99 @@ function Invoke-Verify {
   }
 }
 
+function ConvertTo-SafeThemeId {
+  param([Parameter(Mandatory = $true)][string]$Name)
+  $lower = $Name.ToLowerInvariant()
+  $safe = [regex]::Replace($lower, '[^a-z0-9]+', '-').Trim('-')
+  if ([string]::IsNullOrWhiteSpace($safe)) { $safe = 'custom-theme' }
+  return $safe
+}
+
+function Get-ImageAccentHex {
+  param([Parameter(Mandatory = $true)][string]$ImagePath)
+
+  Add-Type -AssemblyName System.Drawing
+  $image = $null
+  try {
+    $image = [System.Drawing.Bitmap]::FromFile($ImagePath)
+    $step = [Math]::Max(1, [int][Math]::Floor([Math]::Max($image.Width, $image.Height) / 120))
+    $bestColor = [System.Drawing.Color]::FromArgb(216, 107, 141)
+    $bestScore = -1.0
+    for ($y = 0; $y -lt $image.Height; $y += $step) {
+      for ($x = 0; $x -lt $image.Width; $x += $step) {
+        $pixel = $image.GetPixel($x, $y)
+        if ($pixel.A -lt 220) { continue }
+        $sat = [double]$pixel.GetSaturation()
+        $light = [double]$pixel.GetBrightness()
+        if ($sat -lt 0.22 -or $light -lt 0.18 -or $light -gt 0.86) { continue }
+        $score = $sat * (1.0 - [Math]::Abs($light - 0.55))
+        if ($score -gt $bestScore) {
+          $bestScore = $score
+          $bestColor = $pixel
+        }
+      }
+    }
+    return ('#{0:x2}{1:x2}{2:x2}' -f $bestColor.R, $bestColor.G, $bestColor.B)
+  } finally {
+    if ($image) { $image.Dispose() }
+  }
+}
+
+function Invoke-StartAfterThemeChange {
+  & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $StartScript @((Get-PortArguments) + @('-RestartExisting'))
+}
+
+function New-OneClickTheme {
+  $name = (Read-Host 'Theme name').Trim()
+  if (-not $name) {
+    Write-Host 'Cancelled.'
+    return
+  }
+  Write-Host 'Paste a PNG, JPG, JPEG, or WEBP image path. Leave empty to cancel.'
+  $raw = Read-Host 'Image path'
+  $inputPath = $raw.Trim().Trim('"')
+  if (-not $inputPath) {
+    Write-Host 'Cancelled.'
+    return
+  }
+  if (-not (Test-Path -LiteralPath $inputPath -PathType Leaf)) {
+    throw "Image file not found: $inputPath"
+  }
+
+  $paths = Initialize-OneClickThemeStore
+  Assert-DreamSkinImageFile -Path $inputPath
+  $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+  $baseId = ConvertTo-SafeThemeId -Name $name
+  $themeId = "$baseId-$stamp"
+  $exportRoot = Join-Path $OutputsRoot 'themes'
+  $themeDir = Join-Path $exportRoot $themeId
+  New-Item -ItemType Directory -Force -Path $themeDir | Out-Null
+
+  $extension = [System.IO.Path]::GetExtension($inputPath).ToLowerInvariant()
+  $imageName = "art$extension"
+  $imagePath = Join-Path $themeDir $imageName
+  Copy-Item -LiteralPath $inputPath -Destination $imagePath -Force
+  $accent = Get-ImageAccentHex -ImagePath $imagePath
+  $theme = [ordered]@{
+    schemaVersion = 1
+    id = $themeId
+    name = $name
+    image = $imageName
+    appearance = 'auto'
+    art = [ordered]@{ focusX = 0.5; focusY = 0.42; safeArea = 'auto'; taskMode = 'auto' }
+    palette = [ordered]@{ accent = $accent }
+  }
+  Write-DreamSkinTheme -ThemeDirectory $themeDir -Theme ([pscustomobject]$theme)
+  $loaded = Read-DreamSkinTheme -ThemeDirectory $themeDir
+  $activeTheme = $loaded.Theme | ConvertTo-Json -Depth 8 | ConvertFrom-Json
+  $active = Set-DreamSkinActiveTheme -ImagePath $loaded.ImagePath -Theme $activeTheme -StateRoot $paths.Root
+  $null = Save-DreamSkinCurrentTheme -Name $name -StateRoot $paths.Root
+  Write-Host "Theme created and applied: $($active.Theme.name)" -ForegroundColor Green
+  Write-Host "Theme folder: $themeDir" -ForegroundColor Green
+  Write-Host "Accent: $accent" -ForegroundColor Green
+  Invoke-StartAfterThemeChange
+}
+
 function Set-CustomImage {
   Write-Host 'Paste a PNG, JPG, JPEG, or WEBP image path. Leave empty to cancel.'
   $raw = Read-Host 'Image path'
@@ -201,6 +294,7 @@ while ($true) {
   Write-Host '  5. Use my own theme image'
   Write-Host '  6. Apply saved/imported theme'
   Write-Host '  7. Restore default adaptive theme'
+  Write-Host '  M. Make a theme from one image'
   Write-Host '  8. Restore official Codex appearance'
   Write-Host '  9. Uninstall Dream Skin shortcuts'
   Write-Host '  L. Open logs / local data folder'
@@ -216,6 +310,8 @@ while ($true) {
     '5' { Invoke-Step 'Use my own theme image' { Set-CustomImage } }
     '6' { Invoke-Step 'Apply saved/imported theme' { Select-ThemePackage } }
     '7' { Invoke-Step 'Restore default adaptive theme' { Restore-DefaultImage } }
+    'M' { Invoke-Step 'Make a theme from one image' { New-OneClickTheme } }
+    'm' { Invoke-Step 'Make a theme from one image' { New-OneClickTheme } }
     '8' { Invoke-Step 'Restore official Codex appearance' { Invoke-Restore } }
     '9' { Invoke-Step 'Uninstall Dream Skin shortcuts' { Invoke-Uninstall } }
     'L' { Invoke-Step 'Open logs / local data folder' { Open-LocalData } }

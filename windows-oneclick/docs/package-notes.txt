@@ -38,6 +38,9 @@ Compatibility changes applied to the packaged Windows copy:
   was started.
 - app/skin-manager-gui.ps1 starts Dream Skin automatically after install,
   image changes, imported themes, and default-theme restore.
+- app/skin-manager-gui.ps1 and app/skin-manager.ps1 include a one-click theme
+  maker that asks for a name and image, exports a reusable theme folder under
+  outputs/themes, saves it to the local theme library, and applies it.
 - app/skin-manager.ps1 uses the same active-theme store as a fallback console
   menu.
 - docs/theme-packages.txt documents the current theme.json + image folder

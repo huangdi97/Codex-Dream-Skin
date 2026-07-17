@@ -1,5 +1,14 @@
 Codex Dream Skin adaptive theme format
 
+Easiest way:
+
+  Open the one-click manager, click "一键制作主题", enter a theme name, and
+  choose one PNG/JPG/JPEG/WEBP image.
+
+The generated theme folder is saved under:
+
+  outputs\themes\<theme-id>\
+
 A theme is one folder containing:
 
   theme.json
@@ -41,11 +50,12 @@ Rules:
 - palette.accent can be any CSS hex color, such as #d86b8d.
 
 Seller workflow for a requested person/character:
-1. Create one folder named after the request.
-2. Put the chosen image into the folder.
-3. Create theme.json and set image to that file name.
-4. Adjust name and palette.accent.
-5. In the one-click manager, use "主题库 / 导入主题" and select the folder.
+1. Use "一键制作主题".
+2. Enter a theme name and select one image.
+3. Find the generated folder under outputs\themes.
+4. Send that generated folder to the buyer, or import it with "主题库 / 导入主题".
+5. If needed, adjust theme.json fields such as name, palette.accent, art.focusX,
+   art.focusY, art.safeArea, and art.taskMode.
 
 The old control preset format with dream-controls.css, dream-reference.png,
 dream-background.png, and dream-palette.css is no longer used by this package.

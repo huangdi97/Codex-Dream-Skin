@@ -102,6 +102,148 @@ function Import-ExplicitTheme {
   return "Theme applied: $($active.Theme.name). If Codex is running, it will update shortly; otherwise start Dream Skin."
 }
 
+function ConvertTo-SafeThemeId {
+  param([Parameter(Mandatory = $true)][string]$Name)
+  $lower = $Name.ToLowerInvariant()
+  $safe = [regex]::Replace($lower, '[^a-z0-9]+', '-').Trim('-')
+  if ([string]::IsNullOrWhiteSpace($safe)) { $safe = 'custom-theme' }
+  return $safe
+}
+
+function Get-ImageAccentHex {
+  param([Parameter(Mandatory = $true)][string]$ImagePath)
+
+  $image = $null
+  try {
+    $image = [System.Drawing.Bitmap]::FromFile($ImagePath)
+    $step = [Math]::Max(1, [int][Math]::Floor([Math]::Max($image.Width, $image.Height) / 120))
+    $bestColor = [System.Drawing.Color]::FromArgb(216, 107, 141)
+    $bestScore = -1.0
+    for ($y = 0; $y -lt $image.Height; $y += $step) {
+      for ($x = 0; $x -lt $image.Width; $x += $step) {
+        $pixel = $image.GetPixel($x, $y)
+        if ($pixel.A -lt 220) { continue }
+        $sat = [double]$pixel.GetSaturation()
+        $light = [double]$pixel.GetBrightness()
+        if ($sat -lt 0.22 -or $light -lt 0.18 -or $light -gt 0.86) { continue }
+        $score = $sat * (1.0 - [Math]::Abs($light - 0.55))
+        if ($score -gt $bestScore) {
+          $bestScore = $score
+          $bestColor = $pixel
+        }
+      }
+    }
+    return ('#{0:x2}{1:x2}{2:x2}' -f $bestColor.R, $bestColor.G, $bestColor.B)
+  } finally {
+    if ($image) { $image.Dispose() }
+  }
+}
+
+function Show-ThemeNameDialog {
+  $dialog = New-Object System.Windows.Forms.Form
+  $dialog.Text = '制作主题'
+  $dialog.StartPosition = 'CenterParent'
+  $dialog.ClientSize = New-Object System.Drawing.Size(420, 150)
+  $dialog.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
+  $dialog.MaximizeBox = $false
+  $dialog.MinimizeBox = $false
+  $dialog.Font = New-Object System.Drawing.Font('Microsoft YaHei UI', 9)
+
+  $label = New-Object System.Windows.Forms.Label
+  $label.Text = '输入主题名称'
+  $label.Location = New-Object System.Drawing.Point(18, 18)
+  $label.Size = New-Object System.Drawing.Size(360, 24)
+  $dialog.Controls.Add($label)
+
+  $textBox = New-Object System.Windows.Forms.TextBox
+  $textBox.Location = New-Object System.Drawing.Point(18, 48)
+  $textBox.Size = New-Object System.Drawing.Size(382, 24)
+  $textBox.Text = '我的 Dream Skin 主题'
+  $dialog.Controls.Add($textBox)
+
+  $ok = New-Object System.Windows.Forms.Button
+  $ok.Text = '下一步'
+  $ok.Location = New-Object System.Drawing.Point(238, 96)
+  $ok.Size = New-Object System.Drawing.Size(78, 32)
+  $dialog.AcceptButton = $ok
+  $dialog.Controls.Add($ok)
+
+  $cancel = New-Object System.Windows.Forms.Button
+  $cancel.Text = '取消'
+  $cancel.Location = New-Object System.Drawing.Point(322, 96)
+  $cancel.Size = New-Object System.Drawing.Size(78, 32)
+  $dialog.CancelButton = $cancel
+  $dialog.Controls.Add($cancel)
+
+  $script:ThemeNameDialogValue = $null
+  $ok.Add_Click({
+    $value = $textBox.Text.Trim()
+    if ([string]::IsNullOrWhiteSpace($value)) {
+      [void][System.Windows.Forms.MessageBox]::Show('主题名称不能为空。', '制作主题')
+      return
+    }
+    $script:ThemeNameDialogValue = $value
+    $dialog.Close()
+  })
+  $cancel.Add_Click({ $dialog.Close() })
+
+  [void]$dialog.ShowDialog($form)
+  $dialog.Dispose()
+  return $script:ThemeNameDialogValue
+}
+
+function New-OneClickTheme {
+  $name = Show-ThemeNameDialog
+  if (-not $name) { return $Text.cancelled }
+
+  $dialog = New-Object System.Windows.Forms.OpenFileDialog
+  $dialog.Title = '选择主题图片'
+  $dialog.Filter = 'Image files (*.png;*.jpg;*.jpeg;*.webp)|*.png;*.jpg;*.jpeg;*.webp'
+  $dialog.Multiselect = $false
+  if ($dialog.ShowDialog($form) -ne [System.Windows.Forms.DialogResult]::OK) { return $Text.cancelled }
+
+  $paths = Initialize-OneClickThemeStore
+  Assert-DreamSkinImageFile -Path $dialog.FileName
+
+  $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+  $baseId = ConvertTo-SafeThemeId -Name $name
+  $themeId = "$baseId-$stamp"
+  $exportRoot = Join-Path $OutputsRoot 'themes'
+  $themeDir = Join-Path $exportRoot $themeId
+  New-Item -ItemType Directory -Force -Path $themeDir | Out-Null
+
+  $extension = [System.IO.Path]::GetExtension($dialog.FileName).ToLowerInvariant()
+  $imageName = "art$extension"
+  $imagePath = Join-Path $themeDir $imageName
+  Copy-Item -LiteralPath $dialog.FileName -Destination $imagePath -Force
+
+  $accent = Get-ImageAccentHex -ImagePath $imagePath
+  $theme = [ordered]@{
+    schemaVersion = 1
+    id = $themeId
+    name = $name
+    image = $imageName
+    appearance = 'auto'
+    art = [ordered]@{
+      focusX = 0.5
+      focusY = 0.42
+      safeArea = 'auto'
+      taskMode = 'auto'
+    }
+    palette = [ordered]@{
+      accent = $accent
+    }
+  }
+  Write-DreamSkinTheme -ThemeDirectory $themeDir -Theme ([pscustomobject]$theme)
+  $loaded = Read-DreamSkinTheme -ThemeDirectory $themeDir
+  $activeTheme = $loaded.Theme | ConvertTo-Json -Depth 8 | ConvertFrom-Json
+  $active = Set-DreamSkinActiveTheme -ImagePath $loaded.ImagePath -Theme $activeTheme -StateRoot $paths.Root
+  $null = Save-DreamSkinCurrentTheme -Name $name -StateRoot $paths.Root
+  $restart = Restart-DreamSkinAfterThemeChange
+
+  return "主题已制作并应用：$($active.Theme.name)`r`n主题文件夹：$themeDir`r`n强调色：$accent`r`n`r`n$restart"
+}
+
 function Select-ThemePackage {
   $paths = Initialize-OneClickThemeStore
   $packages = @(Get-DreamSkinSavedThemes -StateRoot $paths.Root -SkipImageMetadata)
@@ -549,6 +691,7 @@ $buttonSpecs = @(
   @{ Text = $Text.buttonRestart; Action = { Restart-Start-Skin } },
   @{ Text = $Text.buttonVerify; Action = { Verify-Skin } },
   @{ Text = $Text.buttonImage; Action = { Invoke-GuiAction $Text.busyImage $Text.doneImage { Select-CustomImage } } },
+  @{ Text = (Get-TextValue -Name 'buttonMakeTheme' -Default '一键制作主题'); Action = { Invoke-GuiAction '正在制作主题...' '主题制作完成。' { New-OneClickTheme } } },
   @{ Text = (Get-TextValue -Name 'buttonTheme' -Default '主题库 / 导入主题'); Action = { Invoke-GuiAction 'Applying theme...' 'Theme applied.' { Select-ThemePackage } } },
   @{ Text = $Text.buttonDefaultImage; Action = { Invoke-GuiAction $Text.busyDefaultImage $Text.doneDefaultImage { Restore-DefaultImage } } },
   @{ Text = $Text.buttonRestore; Action = { Restore-Official } },
