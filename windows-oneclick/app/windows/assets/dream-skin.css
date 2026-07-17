@@ -9,6 +9,7 @@
   --dream-sidebar: color-mix(in oklab, oklch(0.965 0.006 35) 94%, var(--dream-accent));
   --dream-text: oklch(0.25 0.018 30);
   --dream-text-muted: oklch(0.48 0.018 30);
+  --dream-font-family: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif;
   --dream-line: color-mix(in oklab, oklch(0.75 0.012 30) 80%, var(--dream-accent));
   --dream-line-soft: color-mix(in oklab, transparent 76%, var(--dream-accent));
   --dream-accent-soft: color-mix(in oklab, var(--dream-accent) 14%, var(--dream-surface));
@@ -58,7 +59,7 @@
 html.codex-dream-skin body {
   background: var(--dream-canvas) !important;
   color: var(--dream-text) !important;
-  font-family: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif !important;
+  font-family: var(--dream-font-family) !important;
 }
 
 html.codex-dream-skin aside.app-shell-left-panel {

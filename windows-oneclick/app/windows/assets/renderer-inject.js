@@ -27,6 +27,11 @@
     "--dream-accent",
     "--dream-accent-ink",
     "--dream-image-luma",
+    "--dream-text",
+    "--dream-text-muted",
+    "--dream-surface",
+    "--dream-sidebar",
+    "--dream-font-family",
   ];
   const HOME_UTILITY_CLASS = "dream-home-utility";
   const installToken = {};
@@ -61,8 +66,14 @@
     const requestedAccent = typeof config?.palette?.accent === "string"
       ? config.palette.accent.trim()
       : "";
-    const safeAccent = /^(?:#[\da-f]{3,8}|(?:rgb|hsl|oklch|oklab)\([^;{}]{1,96}\))$/i.test(requestedAccent)
-      ? requestedAccent
+    const safeColor = (value) =>
+      /^(?:#[\da-f]{3,8}|(?:rgb|hsl|oklch|oklab)\([^;{}]{1,96}\))$/i.test(value || "") ? value : null;
+    const safeAccent = safeColor(requestedAccent);
+    const palette = config.palette && typeof config.palette === "object" ? config.palette : {};
+    const typography = config.typography && typeof config.typography === "object" ? config.typography : {};
+    const fontFamily = typeof typography.fontFamily === "string" &&
+      typography.fontFamily.length <= 180 && !/[\u0000-\u001f;{}<>]/.test(typography.fontFamily)
+      ? typography.fontFamily.trim()
       : null;
     const appearance = ["auto", "light", "dark"].includes(config.appearance)
       ? config.appearance
@@ -81,6 +92,11 @@
       focusX: hasNumber(art.focusX) ? clamp(art.focusX) : null,
       focusY: hasNumber(art.focusY) ? clamp(art.focusY) : null,
       accent: safeAccent,
+      text: safeColor(typeof palette.text === "string" ? palette.text.trim() : ""),
+      textMuted: safeColor(typeof palette.textMuted === "string" ? palette.textMuted.trim() : ""),
+      surface: safeColor(typeof palette.surface === "string" ? palette.surface.trim() : ""),
+      sidebar: safeColor(typeof palette.sidebar === "string" ? palette.sidebar.trim() : ""),
+      fontFamily,
       initialAspect: Number.isFinite(metadataRatio) && metadataRatio > 0 ? metadataRatio : null,
     };
   };
@@ -319,6 +335,11 @@
     root.style.setProperty("--dream-accent", accent);
     root.style.setProperty("--dream-accent-ink", accentInk);
     root.style.setProperty("--dream-image-luma", profile.luma.toFixed(3));
+    if (config.text) root.style.setProperty("--dream-text", config.text);
+    if (config.textMuted) root.style.setProperty("--dream-text-muted", config.textMuted);
+    if (config.surface) root.style.setProperty("--dream-surface", config.surface);
+    if (config.sidebar) root.style.setProperty("--dream-sidebar", config.sidebar);
+    if (config.fontFamily) root.style.setProperty("--dream-font-family", config.fontFamily);
   };
 
   const ensure = () => {

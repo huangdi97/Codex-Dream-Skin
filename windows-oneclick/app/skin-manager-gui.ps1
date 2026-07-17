@@ -240,7 +240,7 @@ function Show-ThemeOptionsDialog {
   $dialog = New-Object System.Windows.Forms.Form
   $dialog.Text = '制作主题'
   $dialog.StartPosition = 'CenterParent'
-  $dialog.ClientSize = New-Object System.Drawing.Size(460, 330)
+  $dialog.ClientSize = New-Object System.Drawing.Size(460, 430)
   $dialog.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
   $dialog.MaximizeBox = $false
   $dialog.MinimizeBox = $false
@@ -341,22 +341,63 @@ function Show-ThemeOptionsDialog {
   $taskBox.SelectedIndex = 0
   $dialog.Controls.Add($taskBox)
 
+  $fontLabel = New-Object System.Windows.Forms.Label
+  $fontLabel.Text = '字体'
+  $fontLabel.Location = New-Object System.Drawing.Point(18, 218)
+  $fontLabel.Size = New-Object System.Drawing.Size(110, 24)
+  $dialog.Controls.Add($fontLabel)
+
+  $fontBox = New-Object System.Windows.Forms.ComboBox
+  $fontBox.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDownList
+  $fontBox.Location = New-Object System.Drawing.Point(140, 216)
+  $fontBox.Size = New-Object System.Drawing.Size(292, 24)
+  foreach ($option in @(
+    [pscustomobject]@{ Label = '默认现代字体'; Value = '"Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif' },
+    [pscustomobject]@{ Label = '微软雅黑'; Value = '"Microsoft YaHei UI", "Microsoft YaHei", sans-serif' },
+    [pscustomobject]@{ Label = '等线 / 简洁'; Value = 'DengXian, "Microsoft YaHei UI", sans-serif' },
+    [pscustomobject]@{ Label = '代码感'; Value = '"Cascadia Code", "Microsoft YaHei UI", monospace' }
+  )) { [void]$fontBox.Items.Add($option) }
+  $fontBox.DisplayMember = 'Label'
+  $fontBox.SelectedIndex = 0
+  $dialog.Controls.Add($fontBox)
+
+  $textColorLabel = New-Object System.Windows.Forms.Label
+  $textColorLabel.Text = '字体颜色'
+  $textColorLabel.Location = New-Object System.Drawing.Point(18, 258)
+  $textColorLabel.Size = New-Object System.Drawing.Size(110, 24)
+  $dialog.Controls.Add($textColorLabel)
+
+  $textColorBox = New-Object System.Windows.Forms.ComboBox
+  $textColorBox.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDownList
+  $textColorBox.Location = New-Object System.Drawing.Point(140, 256)
+  $textColorBox.Size = New-Object System.Drawing.Size(292, 24)
+  foreach ($option in @(
+    [pscustomobject]@{ Label = '自动'; Text = $null; Muted = $null },
+    [pscustomobject]@{ Label = '深墨色'; Text = '#241f27'; Muted = '#665b6b' },
+    [pscustomobject]@{ Label = '柔白色'; Text = '#f8f4ff'; Muted = '#d8ccdf' },
+    [pscustomobject]@{ Label = '暖棕色'; Text = '#3a2a1f'; Muted = '#7a6253' },
+    [pscustomobject]@{ Label = '冷灰蓝'; Text = '#dce8f2'; Muted = '#aebdca' }
+  )) { [void]$textColorBox.Items.Add($option) }
+  $textColorBox.DisplayMember = 'Label'
+  $textColorBox.SelectedIndex = 0
+  $dialog.Controls.Add($textColorBox)
+
   $note = New-Object System.Windows.Forms.Label
   $note.Text = '提示：控件配色会影响按钮、输入框、侧边栏等；任务页面遮罩控制聊天/任务页面是否显示背景图。'
-  $note.Location = New-Object System.Drawing.Point(18, 220)
+  $note.Location = New-Object System.Drawing.Point(18, 300)
   $note.Size = New-Object System.Drawing.Size(414, 42)
   $dialog.Controls.Add($note)
 
   $ok = New-Object System.Windows.Forms.Button
   $ok.Text = '下一步'
-  $ok.Location = New-Object System.Drawing.Point(270, 278)
+  $ok.Location = New-Object System.Drawing.Point(270, 378)
   $ok.Size = New-Object System.Drawing.Size(78, 32)
   $dialog.AcceptButton = $ok
   $dialog.Controls.Add($ok)
 
   $cancel = New-Object System.Windows.Forms.Button
   $cancel.Text = '取消'
-  $cancel.Location = New-Object System.Drawing.Point(354, 278)
+  $cancel.Location = New-Object System.Drawing.Point(354, 378)
   $cancel.Size = New-Object System.Drawing.Size(78, 32)
   $dialog.CancelButton = $cancel
   $dialog.Controls.Add($cancel)
@@ -374,6 +415,9 @@ function Show-ThemeOptionsDialog {
       Appearance = $appearanceBox.SelectedItem.Value
       SafeArea = $safeBox.SelectedItem.Value
       TaskMode = $taskBox.SelectedItem.Value
+      FontFamily = $fontBox.SelectedItem.Value
+      TextColor = $textColorBox.SelectedItem.Text
+      MutedTextColor = $textColorBox.SelectedItem.Muted
     }
     $dialog.Close()
   })
@@ -430,7 +474,12 @@ function New-OneClickTheme {
     palette = [ordered]@{
       accent = $accent
     }
+    typography = [ordered]@{
+      fontFamily = $options.FontFamily
+    }
   }
+  if ($options.TextColor) { $theme.palette.text = $options.TextColor }
+  if ($options.MutedTextColor) { $theme.palette.textMuted = $options.MutedTextColor }
   Write-DreamSkinTheme -ThemeDirectory $themeDir -Theme ([pscustomobject]$theme)
   $loaded = Read-DreamSkinTheme -ThemeDirectory $themeDir
   $activeTheme = $loaded.Theme | ConvertTo-Json -Depth 8 | ConvertFrom-Json
@@ -594,15 +643,17 @@ function Invoke-ScriptProcess {
     Start-Sleep -Milliseconds 250
     [System.Windows.Forms.Application]::DoEvents()
   }
+  [void]$process.WaitForExit(1000)
   $process.Refresh()
 
   $stdout = if (Test-Path -LiteralPath $stdoutPath) { [System.IO.File]::ReadAllText($stdoutPath, [System.Text.Encoding]::UTF8).Trim() } else { '' }
   $stderr = if (Test-Path -LiteralPath $stderrPath) { [System.IO.File]::ReadAllText($stderrPath, [System.Text.Encoding]::UTF8).Trim() } else { '' }
+  $exitCode = if ($null -ne $process.ExitCode) { [int]$process.ExitCode } elseif ($stderr) { 1 } else { 0 }
   $content = @(
     "Time: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')",
     "Script: $ScriptPath",
     "ProcessId: $($process.Id)",
-    "ExitCode: $($process.ExitCode)",
+    "ExitCode: $exitCode",
     "StdoutLog: $stdoutPath",
     "StderrLog: $stderrPath",
     '',
@@ -614,9 +665,9 @@ function Invoke-ScriptProcess {
   ) -join "`r`n"
   Set-Content -LiteralPath $LogPath -Value $content -Encoding UTF8
 
-  if ($process.ExitCode -ne 0) {
+  if ($exitCode -ne 0) {
     $detail = (($stderr, $stdout) | Where-Object { $_ } | Select-Object -First 1)
-    if (-not $detail) { $detail = "脚本退出码：$($process.ExitCode)" }
+    if (-not $detail) { $detail = "脚本退出码：$exitCode" }
     throw ($detail + "`r`n`r`n日志：$LogPath")
   }
 

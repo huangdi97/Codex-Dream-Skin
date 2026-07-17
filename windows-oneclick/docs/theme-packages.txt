@@ -3,9 +3,10 @@ Codex Dream Skin adaptive theme format
 Easiest way:
 
   Open the one-click manager, click "一键制作主题", enter a theme name, and
-  choose control colors, appearance, home text mask, task-page mask, and one
-  PNG/JPG/JPEG/WEBP image. The one-click maker compresses the image to a stable
-  JPG theme asset and opens a verification screenshot after apply.
+  choose control colors, font, text color, appearance, home text mask,
+  task-page mask, and one PNG/JPG/JPEG/WEBP image. The one-click maker
+  compresses the image to a stable JPG theme asset and opens a verification
+  screenshot after apply.
 
 The generated theme folder is saved under:
 
@@ -37,7 +38,12 @@ Minimal theme.json:
     "taskMode": "auto"
   },
   "palette": {
-    "accent": "#d86b8d"
+    "accent": "#d86b8d",
+    "text": "#241f27",
+    "textMuted": "#665b6b"
+  },
+  "typography": {
+    "fontFamily": "\"Microsoft YaHei UI\", \"Microsoft YaHei\", sans-serif"
   }
 }
 
@@ -52,6 +58,8 @@ Rules:
 - taskMode controls whether the task/chat page shows the image: auto, ambient,
   banner, or off.
 - palette.accent can be any CSS hex color, such as #d86b8d.
+- palette.text and palette.textMuted can override text colors.
+- typography.fontFamily can override the UI font stack.
 
 Seller workflow for a requested person/character:
 1. Use "一键制作主题".
@@ -59,7 +67,8 @@ Seller workflow for a requested person/character:
 3. Find the generated folder under outputs\themes.
 4. Send that generated folder to the buyer, or import it with "主题库 / 导入主题".
 5. If needed, adjust theme.json fields such as name, appearance,
-   palette.accent, art.focusX, art.focusY, art.safeArea, and art.taskMode.
+   palette.accent, palette.text, palette.textMuted, typography.fontFamily,
+   art.focusX, art.focusY, art.safeArea, and art.taskMode.
 
 The old control preset format with dream-controls.css, dream-reference.png,
 dream-background.png, and dream-palette.css is no longer used by this package.

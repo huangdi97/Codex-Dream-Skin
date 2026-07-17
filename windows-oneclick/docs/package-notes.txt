@@ -45,6 +45,10 @@ Compatibility changes applied to the packaged Windows copy:
   theme asset, and opens a verification screenshot after applying the theme.
 - The theme maker now exposes control color, appearance, home readability mask,
   and task-page background mask choices.
+- Theme JSON now supports typography.fontFamily, palette.text, and
+  palette.textMuted for font and text color customization.
+- The GUI no longer treats a blank PowerShell ExitCode with empty stderr as a
+  failure, avoiding false "operation failed" messages after successful apply.
 - app/skin-manager.ps1 uses the same active-theme store as a fallback console
   menu.
 - docs/theme-packages.txt documents the current theme.json + image folder

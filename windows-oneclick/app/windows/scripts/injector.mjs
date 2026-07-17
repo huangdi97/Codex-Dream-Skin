@@ -304,6 +304,24 @@ function normalizedText(value, name, fallback, maxLength = 120) {
   return value;
 }
 
+function normalizedCssColor(value, name) {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const color = value.trim();
+  if (!/^(?:#[\da-f]{3,8}|(?:rgb|hsl|oklch|oklab)\([^;{}]{1,96}\))$/i.test(color)) {
+    throw new Error(`${name} is not a supported CSS color`);
+  }
+  return color;
+}
+
+function normalizedCssFontFamily(value, name) {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const fontFamily = value.trim();
+  if (fontFamily.length > 180 || /[\u0000-\u001f;{}<>]/.test(fontFamily)) {
+    throw new Error(`${name} must be a safe CSS font-family value`);
+  }
+  return fontFamily;
+}
+
 async function loadTheme(themeDir) {
   const realThemeDir = await fs.realpath(themeDir);
   const themePath = path.join(realThemeDir, "theme.json");
@@ -331,6 +349,8 @@ async function loadTheme(themeDir) {
   const art = raw.art && typeof raw.art === "object" && !Array.isArray(raw.art) ? raw.art : {};
   const palette = raw.palette && typeof raw.palette === "object" && !Array.isArray(raw.palette)
     ? raw.palette : {};
+  const typography = raw.typography && typeof raw.typography === "object" && !Array.isArray(raw.typography)
+    ? raw.typography : {};
   const theme = {
     id: normalizedText(raw.id, "id", "custom", 80),
     name: normalizedText(raw.name, "name", "Codex Dream Skin", 120),
@@ -344,13 +364,12 @@ async function loadTheme(themeDir) {
     },
     palette: {},
   };
-  if (typeof palette.accent === "string" && palette.accent.trim()) {
-    const accent = palette.accent.trim();
-    if (!/^(?:#[\da-f]{3,8}|(?:rgb|hsl|oklch|oklab)\([^;{}]{1,96}\))$/i.test(accent)) {
-      throw new Error("palette.accent is not a supported CSS color");
-    }
-    theme.palette.accent = accent;
+  for (const key of ["accent", "text", "textMuted", "surface", "sidebar"]) {
+    const color = normalizedCssColor(palette[key], `palette.${key}`);
+    if (color) theme.palette[key] = color;
   }
+  const fontFamily = normalizedCssFontFamily(typography.fontFamily, "typography.fontFamily");
+  if (fontFamily) theme.typography = { fontFamily };
   const [themeStat, imageStat] = await Promise.all([fs.stat(themePath), fs.stat(realImagePath)]);
   if (!imageStat.isFile()) throw new Error("Theme image is not a file");
   if (imageStat.size < 1) throw new Error("Theme image cannot be empty");

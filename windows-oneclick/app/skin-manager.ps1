@@ -260,6 +260,19 @@ function New-OneClickTheme {
     [pscustomobject]@{ Label = 'Top banner mask'; Value = 'banner' },
     [pscustomobject]@{ Label = 'Hide background image'; Value = 'off' }
   )
+  $font = Read-ThemeChoice -Title 'Font' -Options @(
+    [pscustomobject]@{ Label = 'Modern default'; Value = '"Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif' },
+    [pscustomobject]@{ Label = 'Microsoft YaHei'; Value = '"Microsoft YaHei UI", "Microsoft YaHei", sans-serif' },
+    [pscustomobject]@{ Label = 'DengXian clean'; Value = 'DengXian, "Microsoft YaHei UI", sans-serif' },
+    [pscustomobject]@{ Label = 'Code style'; Value = '"Cascadia Code", "Microsoft YaHei UI", monospace' }
+  )
+  $textColor = Read-ThemeChoice -Title 'Text color' -Options @(
+    [pscustomobject]@{ Label = 'Auto'; Text = $null; Muted = $null },
+    [pscustomobject]@{ Label = 'Dark ink'; Text = '#241f27'; Muted = '#665b6b' },
+    [pscustomobject]@{ Label = 'Soft white'; Text = '#f8f4ff'; Muted = '#d8ccdf' },
+    [pscustomobject]@{ Label = 'Warm brown'; Text = '#3a2a1f'; Muted = '#7a6253' },
+    [pscustomobject]@{ Label = 'Cool gray blue'; Text = '#dce8f2'; Muted = '#aebdca' }
+  )
 
   $paths = Initialize-OneClickThemeStore
   Assert-DreamSkinImageFile -Path $inputPath
@@ -286,7 +299,10 @@ function New-OneClickTheme {
     quote = 'MAKE SOMETHING WONDERFUL'
     art = [ordered]@{ focusX = 0.5; focusY = 0.42; safeArea = $safeArea.Value; taskMode = $taskMode.Value }
     palette = [ordered]@{ accent = $accent }
+    typography = [ordered]@{ fontFamily = $font.Value }
   }
+  if ($textColor.Text) { $theme.palette.text = $textColor.Text }
+  if ($textColor.Muted) { $theme.palette.textMuted = $textColor.Muted }
   Write-DreamSkinTheme -ThemeDirectory $themeDir -Theme ([pscustomobject]$theme)
   $loaded = Read-DreamSkinTheme -ThemeDirectory $themeDir
   $activeTheme = $loaded.Theme | ConvertTo-Json -Depth 8 | ConvertFrom-Json
