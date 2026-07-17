@@ -3,7 +3,8 @@ Codex Dream Skin adaptive theme format
 Easiest way:
 
   Open the one-click manager, click "一键制作主题", enter a theme name, and
-  choose one PNG/JPG/JPEG/WEBP image.
+  choose one PNG/JPG/JPEG/WEBP image. The one-click maker compresses the image
+  to a stable JPG theme asset and opens a verification screenshot after apply.
 
 The generated theme folder is saved under:
 

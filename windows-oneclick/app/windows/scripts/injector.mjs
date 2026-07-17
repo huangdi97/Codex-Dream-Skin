@@ -211,7 +211,7 @@ class BrowserIdentityAnchor {
       const timeout = setTimeout(() => {
         this.close();
         reject(new Error("CDP browser identity WebSocket open timed out"));
-      }, 5000);
+      }, 15000);
       this.ws.addEventListener("open", () => { clearTimeout(timeout); resolve(); }, { once: true });
       this.ws.addEventListener("error", () => {
         clearTimeout(timeout);

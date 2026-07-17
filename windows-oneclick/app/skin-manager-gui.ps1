@@ -139,6 +139,103 @@ function Get-ImageAccentHex {
   }
 }
 
+function Save-ThemeImage {
+  param(
+    [Parameter(Mandatory = $true)][string]$SourcePath,
+    [Parameter(Mandatory = $true)][string]$DestinationPath
+  )
+
+  $source = $null
+  $canvas = $null
+  $graphics = $null
+  $encoderParams = $null
+  try {
+    $source = [System.Drawing.Image]::FromFile($SourcePath)
+    $maxEdge = 1920.0
+    $scale = [Math]::Min(1.0, $maxEdge / [Math]::Max($source.Width, $source.Height))
+    $width = [Math]::Max(1, [int][Math]::Round($source.Width * $scale))
+    $height = [Math]::Max(1, [int][Math]::Round($source.Height * $scale))
+
+    $canvas = New-Object System.Drawing.Bitmap $width, $height
+    $canvas.SetResolution(96, 96)
+    $graphics = [System.Drawing.Graphics]::FromImage($canvas)
+    $graphics.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
+    $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+    $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+    $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+    $graphics.Clear([System.Drawing.Color]::White)
+    $graphics.DrawImage($source, 0, 0, $width, $height)
+
+    $jpegCodec = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() |
+      Where-Object { $_.MimeType -eq 'image/jpeg' } |
+      Select-Object -First 1
+    if ($null -eq $jpegCodec) { throw 'JPEG image encoder is not available on this Windows system.' }
+
+    $encoderParams = New-Object System.Drawing.Imaging.EncoderParameters 1
+    $encoderParams.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter `
+      -ArgumentList ([System.Drawing.Imaging.Encoder]::Quality), ([int64]86)
+    $canvas.Save($DestinationPath, $jpegCodec, $encoderParams)
+  } finally {
+    if ($encoderParams) { $encoderParams.Dispose() }
+    if ($graphics) { $graphics.Dispose() }
+    if ($canvas) { $canvas.Dispose() }
+    if ($source) { $source.Dispose() }
+  }
+}
+
+function Show-ThemeImagePreview {
+  param(
+    [Parameter(Mandatory = $true)][string]$ImagePath,
+    [Parameter(Mandatory = $true)][string]$ThemeName
+  )
+
+  $preview = New-Object System.Windows.Forms.Form
+  $preview.Text = '确认主题预览'
+  $preview.StartPosition = 'CenterParent'
+  $preview.ClientSize = New-Object System.Drawing.Size(620, 470)
+  $preview.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
+  $preview.MaximizeBox = $false
+  $preview.MinimizeBox = $false
+  $preview.Font = New-Object System.Drawing.Font('Microsoft YaHei UI', 9)
+
+  $label = New-Object System.Windows.Forms.Label
+  $label.Text = "主题：$ThemeName"
+  $label.Location = New-Object System.Drawing.Point(18, 14)
+  $label.Size = New-Object System.Drawing.Size(580, 24)
+  $preview.Controls.Add($label)
+
+  $box = New-Object System.Windows.Forms.PictureBox
+  $box.Location = New-Object System.Drawing.Point(18, 46)
+  $box.Size = New-Object System.Drawing.Size(580, 340)
+  $box.SizeMode = [System.Windows.Forms.PictureBoxSizeMode]::Zoom
+  $box.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
+  $box.Image = [System.Drawing.Image]::FromFile($ImagePath)
+  $preview.Controls.Add($box)
+
+  $ok = New-Object System.Windows.Forms.Button
+  $ok.Text = '生成并应用'
+  $ok.Location = New-Object System.Drawing.Point(408, 410)
+  $ok.Size = New-Object System.Drawing.Size(92, 34)
+  $preview.AcceptButton = $ok
+  $preview.Controls.Add($ok)
+
+  $cancel = New-Object System.Windows.Forms.Button
+  $cancel.Text = '取消'
+  $cancel.Location = New-Object System.Drawing.Point(506, 410)
+  $cancel.Size = New-Object System.Drawing.Size(92, 34)
+  $preview.CancelButton = $cancel
+  $preview.Controls.Add($cancel)
+
+  $script:ThemePreviewConfirmed = $false
+  $ok.Add_Click({ $script:ThemePreviewConfirmed = $true; $preview.Close() })
+  $cancel.Add_Click({ $preview.Close() })
+
+  [void]$preview.ShowDialog($form)
+  if ($box.Image) { $box.Image.Dispose() }
+  $preview.Dispose()
+  return $script:ThemePreviewConfirmed
+}
+
 function Show-ThemeNameDialog {
   $dialog = New-Object System.Windows.Forms.Form
   $dialog.Text = '制作主题'
@@ -201,6 +298,7 @@ function New-OneClickTheme {
   $dialog.Filter = 'Image files (*.png;*.jpg;*.jpeg;*.webp)|*.png;*.jpg;*.jpeg;*.webp'
   $dialog.Multiselect = $false
   if ($dialog.ShowDialog($form) -ne [System.Windows.Forms.DialogResult]::OK) { return $Text.cancelled }
+  if (-not (Show-ThemeImagePreview -ImagePath $dialog.FileName -ThemeName $name)) { return $Text.cancelled }
 
   $paths = Initialize-OneClickThemeStore
   Assert-DreamSkinImageFile -Path $dialog.FileName
@@ -212,10 +310,9 @@ function New-OneClickTheme {
   $themeDir = Join-Path $exportRoot $themeId
   New-Item -ItemType Directory -Force -Path $themeDir | Out-Null
 
-  $extension = [System.IO.Path]::GetExtension($dialog.FileName).ToLowerInvariant()
-  $imageName = "art$extension"
+  $imageName = 'art.jpg'
   $imagePath = Join-Path $themeDir $imageName
-  Copy-Item -LiteralPath $dialog.FileName -Destination $imagePath -Force
+  Save-ThemeImage -SourcePath $dialog.FileName -DestinationPath $imagePath
 
   $accent = Get-ImageAccentHex -ImagePath $imagePath
   $theme = [ordered]@{
@@ -240,8 +337,20 @@ function New-OneClickTheme {
   $active = Set-DreamSkinActiveTheme -ImagePath $loaded.ImagePath -Theme $activeTheme -StateRoot $paths.Root
   $null = Save-DreamSkinCurrentTheme -Name $name -StateRoot $paths.Root
   $restart = Restart-DreamSkinAfterThemeChange
+  $previewPath = Join-Path $OutputsRoot ("theme-preview-" + (Get-Date -Format 'yyyyMMdd-HHmmss') + ".png")
+  $verifyMessage = ''
+  try {
+    $null = Invoke-ScriptProcess -ScriptPath $VerifyScript `
+      -Arguments ((Get-PortArguments) + @('-ScreenshotPath', $previewPath)) -TimeoutSeconds 90
+    if (Test-Path -LiteralPath $previewPath) {
+      Start-Process -FilePath $previewPath | Out-Null
+      $verifyMessage = "`r`n效果截图：$previewPath"
+    }
+  } catch {
+    $verifyMessage = "`r`n主题已生成，但自动截图失败：$($_.Exception.Message)"
+  }
 
-  return "主题已制作并应用：$($active.Theme.name)`r`n主题文件夹：$themeDir`r`n强调色：$accent`r`n`r`n$restart"
+  return "主题已制作并应用：$($active.Theme.name)`r`n主题文件夹：$themeDir`r`n强调色：$accent$verifyMessage`r`n`r`n$restart"
 }
 
 function Select-ThemePackage {
@@ -385,6 +494,7 @@ function Invoke-ScriptProcess {
     Start-Sleep -Milliseconds 250
     [System.Windows.Forms.Application]::DoEvents()
   }
+  $process.Refresh()
 
   $stdout = if (Test-Path -LiteralPath $stdoutPath) { [System.IO.File]::ReadAllText($stdoutPath, [System.Text.Encoding]::UTF8).Trim() } else { '' }
   $stderr = if (Test-Path -LiteralPath $stderrPath) { [System.IO.File]::ReadAllText($stderrPath, [System.Text.Encoding]::UTF8).Trim() } else { '' }

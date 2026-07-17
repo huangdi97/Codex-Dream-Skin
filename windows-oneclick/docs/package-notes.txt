@@ -41,6 +41,8 @@ Compatibility changes applied to the packaged Windows copy:
 - app/skin-manager-gui.ps1 and app/skin-manager.ps1 include a one-click theme
   maker that asks for a name and image, exports a reusable theme folder under
   outputs/themes, saves it to the local theme library, and applies it.
+- The theme maker now previews the chosen image, compresses it to a smaller JPG
+  theme asset, and opens a verification screenshot after applying the theme.
 - app/skin-manager.ps1 uses the same active-theme store as a fallback console
   menu.
 - docs/theme-packages.txt documents the current theme.json + image folder
