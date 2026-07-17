@@ -175,9 +175,12 @@ function Select-ThemePackage {
   if (-not $script:SelectedThemePath) { return $Text.cancelled }
   if (Test-DreamSkinThemePathWithin -Path $script:SelectedThemePath -Root $paths.Saved) {
     $active = Use-DreamSkinSavedTheme -ThemeDirectory $script:SelectedThemePath -StateRoot $paths.Root
-    return "Theme applied: $($active.Theme.name). If Codex is running, it will update shortly; otherwise start Dream Skin."
+    $restart = Restart-DreamSkinAfterThemeChange
+    return "主题已应用：$($active.Theme.name)`r`n`r`n$restart"
   }
-  return Import-ExplicitTheme -ThemeDir $script:SelectedThemePath
+  $result = Import-ExplicitTheme -ThemeDir $script:SelectedThemePath
+  $restart = Restart-DreamSkinAfterThemeChange
+  return "$result`r`n`r`n$restart"
 }
 
 function Assert-PackageReady {
@@ -203,45 +206,82 @@ function ConvertTo-ProcessArgument {
   return '"' + $escaped + '"'
 }
 
+function Invoke-ScriptProcess {
+  param(
+    [Parameter(Mandatory = $true)][string]$ScriptPath,
+    [string[]]$Arguments = @(),
+    [int]$TimeoutSeconds = 120
+  )
+
+  New-Item -ItemType Directory -Force -Path $OutputsRoot | Out-Null
+
+  $argumentList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $ScriptPath) + $Arguments
+  $stamp = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
+  $stdoutPath = Join-Path $OutputsRoot "action-$stamp.out.log"
+  $stderrPath = Join-Path $OutputsRoot "action-$stamp.err.log"
+
+  $process = Start-Process -FilePath 'powershell.exe' `
+    -ArgumentList (($argumentList | ForEach-Object { ConvertTo-ProcessArgument $_ }) -join ' ') `
+    -WindowStyle Hidden `
+    -RedirectStandardOutput $stdoutPath `
+    -RedirectStandardError $stderrPath `
+    -PassThru
+  if ($null -eq $process) { throw $Text.scriptStartFailed }
+
+  $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+  while (-not $process.HasExited) {
+    if ((Get-Date) -ge $deadline) {
+      try { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue } catch {}
+      throw "操作超时，已停止脚本。日志：$stdoutPath / $stderrPath"
+    }
+    Start-Sleep -Milliseconds 250
+    [System.Windows.Forms.Application]::DoEvents()
+  }
+
+  $stdout = if (Test-Path -LiteralPath $stdoutPath) { [System.IO.File]::ReadAllText($stdoutPath, [System.Text.Encoding]::UTF8).Trim() } else { '' }
+  $stderr = if (Test-Path -LiteralPath $stderrPath) { [System.IO.File]::ReadAllText($stderrPath, [System.Text.Encoding]::UTF8).Trim() } else { '' }
+  $content = @(
+    "Time: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')",
+    "Script: $ScriptPath",
+    "ProcessId: $($process.Id)",
+    "ExitCode: $($process.ExitCode)",
+    "StdoutLog: $stdoutPath",
+    "StderrLog: $stderrPath",
+    '',
+    'STDOUT:',
+    $stdout,
+    '',
+    'STDERR:',
+    $stderr
+  ) -join "`r`n"
+  Set-Content -LiteralPath $LogPath -Value $content -Encoding UTF8
+
+  if ($process.ExitCode -ne 0) {
+    $detail = (($stderr, $stdout) | Where-Object { $_ } | Select-Object -First 1)
+    if (-not $detail) { $detail = "脚本退出码：$($process.ExitCode)" }
+    throw ($detail + "`r`n`r`n日志：$LogPath")
+  }
+
+  return (($stdout, $stderr) | Where-Object { $_ }) -join "`r`n"
+}
+
 function Start-ScriptProcess {
   param(
     [Parameter(Mandatory = $true)][string]$BusyText,
     [Parameter(Mandatory = $true)][string]$DoneText,
     [Parameter(Mandatory = $true)][string]$ScriptPath,
     [string[]]$Arguments = @(),
-    [string]$ExtraDoneText = ''
+    [string]$ExtraDoneText = '',
+    [int]$TimeoutSeconds = 120
   )
 
   try {
-    New-Item -ItemType Directory -Force -Path $OutputsRoot | Out-Null
     Set-UiBusy -Busy $true -Body $BusyText
-
-    $argumentList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $ScriptPath) + $Arguments
-    $stamp = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
-    $stdoutPath = Join-Path $OutputsRoot "action-$stamp.out.log"
-    $stderrPath = Join-Path $OutputsRoot "action-$stamp.err.log"
-
-    $process = Start-Process -FilePath 'powershell.exe' `
-      -ArgumentList (($argumentList | ForEach-Object { ConvertTo-ProcessArgument $_ }) -join ' ') `
-      -WindowStyle Hidden `
-      -RedirectStandardOutput $stdoutPath `
-      -RedirectStandardError $stderrPath `
-      -PassThru
-    if ($null -eq $process) { throw $Text.scriptStartFailed }
-
-    $content = @(
-      "Time: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')",
-      "Script: $ScriptPath",
-      "StartedProcessId: $($process.Id)",
-      "Status: started",
-      "StdoutLog: $stdoutPath",
-      "StderrLog: $stderrPath",
-      '',
-      $Text.backgroundOperationNote
-    ) -join "`r`n"
-    Set-Content -LiteralPath $LogPath -Value $content -Encoding UTF8
+    $output = Invoke-ScriptProcess -ScriptPath $ScriptPath -Arguments $Arguments -TimeoutSeconds $TimeoutSeconds
     Set-UiBusy -Busy $false -Body $DoneText
-    Show-Message ($DoneText + $ExtraDoneText + "`r`n`r`n" + $Text.backgroundOperationNote)
+    $body = $DoneText + $ExtraDoneText
+    if ($output) { $body += "`r`n`r`n" + $output }
+    Show-Message $body
   } catch {
     Write-GuiCrashLog $_
     Set-UiBusy -Busy $false -Body $Text.failedStatus
@@ -334,8 +374,21 @@ function Close-CodexForInstall {
 
 function Install-Skin {
   if (-not (Close-CodexForInstall)) { return $Text.cancelled }
-  Start-ScriptProcess -BusyText $Text.busyInstall -DoneText $Text.doneInstall `
-    -ScriptPath $InstallScript -Arguments @('-Port', "$Port")
+  try {
+    Set-UiBusy -Busy $true -Body $Text.busyInstall
+    $installOutput = Invoke-ScriptProcess -ScriptPath $InstallScript -Arguments @('-Port', "$Port") -TimeoutSeconds 90
+    Set-UiBusy -Busy $true -Body $Text.busyStart
+    $startOutput = Invoke-ScriptProcess -ScriptPath $StartScript -Arguments @('-Port', "$Port", '-RestartExisting') -TimeoutSeconds 120
+    Set-UiBusy -Busy $false -Body $Text.doneStart
+    $details = (($installOutput, $startOutput) | Where-Object { $_ }) -join "`r`n`r`n"
+    $body = "安装 / 修复完成，皮肤版 Codex 已启动。"
+    if ($details) { $body += "`r`n`r`n" + $details }
+    Show-Message $body
+  } catch {
+    Write-GuiCrashLog $_
+    Set-UiBusy -Busy $false -Body $Text.failedStatus
+    Show-Message $_.Exception.Message $Text.failedTitle ([System.Windows.Forms.MessageBoxIcon]::Error)
+  }
 }
 
 function Start-Skin {
@@ -356,7 +409,13 @@ function Verify-Skin {
   $screenshot = Join-Path $OutputsRoot "verify-$stamp.png"
   Start-ScriptProcess -BusyText $Text.busyVerify -DoneText $Text.doneVerify `
     -ScriptPath $VerifyScript -Arguments @('-Port', "$Port", '-ScreenshotPath', $screenshot) `
-    -ExtraDoneText ("`r`n`r`n" + $Text.screenshotSaved + $screenshot)
+    -ExtraDoneText ("`r`n`r`n" + $Text.screenshotSaved + $screenshot) -TimeoutSeconds 90
+}
+
+function Restart-DreamSkinAfterThemeChange {
+  $output = Invoke-ScriptProcess -ScriptPath $StartScript -Arguments @('-Port', "$Port", '-RestartExisting') -TimeoutSeconds 120
+  if ($output) { return $output }
+  return 'Dream Skin 已重新启动，主题应已生效。'
 }
 
 function Select-CustomImage {
@@ -367,11 +426,14 @@ function Select-CustomImage {
   if ($dialog.ShowDialog($form) -ne [System.Windows.Forms.DialogResult]::OK) { return $Text.cancelled }
   $paths = Initialize-OneClickThemeStore
   $active = Set-DreamSkinActiveTheme -ImagePath $dialog.FileName -Theme $null -Name 'Custom image' -StateRoot $paths.Root
-  return "Custom adaptive theme applied: $($active.Theme.name). If Codex is running, it will update shortly; otherwise start Dream Skin."
+  $restart = Restart-DreamSkinAfterThemeChange
+  return "主题已应用：$($active.Theme.name)`r`n`r`n$restart"
 }
 
 function Restore-DefaultImage {
-  return Set-DefaultDreamTheme
+  $result = Set-DefaultDreamTheme
+  $restart = Restart-DreamSkinAfterThemeChange
+  return "$result`r`n`r`n$restart"
 }
 
 function Restore-Official {

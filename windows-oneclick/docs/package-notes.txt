@@ -33,6 +33,11 @@ Compatibility changes applied to the packaged Windows copy:
 - app/skin-manager-gui.ps1 uses the upstream active-theme store, so chosen
   images and imported themes update the running watcher without replacing
   bundled asset files.
+- app/skin-manager-gui.ps1 now waits for install/start/restore/verify scripts
+  to finish and shows real failures instead of only saying a background process
+  was started.
+- app/skin-manager-gui.ps1 starts Dream Skin automatically after install,
+  image changes, imported themes, and default-theme restore.
 - app/skin-manager.ps1 uses the same active-theme store as a fallback console
   menu.
 - docs/theme-packages.txt documents the current theme.json + image folder
