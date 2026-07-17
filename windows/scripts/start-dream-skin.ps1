@@ -11,6 +11,7 @@ $ErrorActionPreference = 'Stop'
 $PortExplicit = $PSBoundParameters.ContainsKey('Port')
 $Injector = Join-Path $PSScriptRoot 'injector.mjs'
 . (Join-Path $PSScriptRoot 'common-windows.ps1')
+. (Join-Path $PSScriptRoot 'theme-windows.ps1')
 
 $operationLock = Enter-DreamSkinOperationLock
 try {
@@ -20,11 +21,14 @@ try {
   $currentCodex = Get-DreamSkinCodexInstall
   $codex = $currentCodex
   $StateRoot = Join-Path $env:LOCALAPPDATA 'CodexDreamSkin'
+  $themePaths = Get-DreamSkinThemePaths -StateRoot $StateRoot
+  Ensure-DreamSkinManagedDirectory -Path $themePaths.Root -Root $themePaths.Root
   $StatePath = Join-Path $StateRoot 'state.json'
   $StdoutPath = Join-Path $StateRoot 'injector.log'
   $StderrPath = Join-Path $StateRoot 'injector-error.log'
   $VerifyPath = Join-Path $StateRoot 'verify.log'
-  New-Item -ItemType Directory -Force -Path $StateRoot | Out-Null
+  $themePaths = Initialize-DreamSkinThemeStore -SkillRoot (Split-Path -Parent $PSScriptRoot) -StateRoot $StateRoot
+  $pauseWasSet = Test-DreamSkinPaused -StateRoot $StateRoot
 
   $previousState = Read-DreamSkinState -Path $StatePath
   if (-not $PortExplicit -and $null -ne $previousState -and $previousState.port) {
@@ -158,19 +162,40 @@ try {
     throw
   }
 
+  # Keep a paused, already-running watcher paused until all state checks and any
+  # restart consent have succeeded.  A cancelled prompt must be side-effect free.
+  Set-DreamSkinPaused -Paused $false -StateRoot $StateRoot | Out-Null
+  $pauseCleared = $true
+
   if ($ForegroundInjector) {
-    Remove-Item -LiteralPath $StatePath -Force -ErrorAction SilentlyContinue
-    Exit-DreamSkinOperationLock -Mutex $operationLock
-    $operationLock = $null
-    & $node.Path $Injector --watch --port $Port --browser-id $cdpIdentity.BrowserId
-    exit $LASTEXITCODE
+    try {
+      Remove-Item -LiteralPath $StatePath -Force -ErrorAction SilentlyContinue
+      Exit-DreamSkinOperationLock -Mutex $operationLock
+      $operationLock = $null
+      & $node.Path $Injector --watch --port $Port --browser-id $cdpIdentity.BrowserId `
+        --theme-dir $themePaths.Active --pause-file $themePaths.PauseFile
+      $foregroundExitCode = $LASTEXITCODE
+      if ($foregroundExitCode -ne 0 -and $pauseWasSet) {
+        Set-DreamSkinPaused -Paused $true -StateRoot $StateRoot | Out-Null
+      }
+      exit $foregroundExitCode
+    } catch {
+      if ($pauseWasSet) {
+        try { Set-DreamSkinPaused -Paused $true -StateRoot $StateRoot | Out-Null } catch {
+          Write-Warning 'Foreground startup rollback could not restore the existing paused state.'
+        }
+      }
+      throw
+    }
   }
 
   $state = $null
   $daemon = $null
   try {
     $injectorArgs = @((ConvertTo-DreamSkinProcessArgument -Value $Injector), '--watch', '--port', "$Port",
-      '--browser-id', $cdpIdentity.BrowserId)
+      '--browser-id', $cdpIdentity.BrowserId, '--theme-dir',
+      (ConvertTo-DreamSkinProcessArgument -Value $themePaths.Active), '--pause-file',
+      (ConvertTo-DreamSkinProcessArgument -Value $themePaths.PauseFile))
     $daemon = Start-Process -FilePath $node.Path -ArgumentList $injectorArgs -WindowStyle Hidden -PassThru `
       -RedirectStandardOutput $StdoutPath -RedirectStandardError $StderrPath
     Start-Sleep -Milliseconds 500
@@ -194,6 +219,8 @@ try {
       codexVersion = $codex.Version
       browserId = $cdpIdentity.BrowserId
       profilePath = $ProfilePath
+      themeDir = $themePaths.Active
+      pauseFile = $themePaths.PauseFile
       createdAt = (Get-Date).ToUniversalTime().ToString('o')
     }
     Write-DreamSkinState -Path $StatePath -State $state
@@ -242,6 +269,13 @@ try {
         Start-Process -FilePath $codex.Executable | Out-Null
       } catch {
         Write-Warning 'Startup rollback could not fully restart Codex; close Codex to ensure its CDP port is closed.'
+      }
+    }
+    if ($pauseWasSet -and $pauseCleared) {
+      try {
+        Set-DreamSkinPaused -Paused $true -StateRoot $StateRoot | Out-Null
+      } catch {
+        Write-Warning 'Startup rollback could not restore the existing paused state.'
       }
     }
     throw $startupError
