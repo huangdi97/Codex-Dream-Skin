@@ -73,6 +73,11 @@ Compatibility changes applied to the packaged Windows copy:
   restoring quoted [desktop] TOML sections.
 - app/windows/scripts/config-utf8.ps1 adds direct line-by-line detection for
   multiline TOML arrays before line-level editing.
+- Upstream Windows runtime fixes through 3af1d6d were selectively ported into
+  the one-click package, including self-contained runtime shortcuts,
+  RemoteSigned shortcut launchers, Store package activation, CDP message
+  validation, safer screenshot capture, nested desktop TOML preservation, and
+  title/menu readability fixes.
 
 Validation:
 - skin-manager-gui.ps1 PowerShell parser check passed.
