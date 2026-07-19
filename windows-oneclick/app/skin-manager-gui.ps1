@@ -1302,12 +1302,176 @@ function Uninstall-Skin {
     -ScriptPath $RestoreScript -Arguments ((Get-PortArguments) + @('-Uninstall', '-RestoreBaseTheme', '-PromptRestart'))
 }
 
-function Open-Logs {
+function Copy-DreamSkinDiagnosticFile {
+  param(
+    [Parameter(Mandatory = $true)][string]$Source,
+    [Parameter(Mandatory = $true)][string]$DestinationDirectory
+  )
+
+  if (-not (Test-Path -LiteralPath $Source -PathType Leaf)) { return $false }
+  New-Item -ItemType Directory -Force -Path $DestinationDirectory | Out-Null
+  Copy-Item -LiteralPath $Source -Destination (Join-Path $DestinationDirectory ([System.IO.Path]::GetFileName($Source))) -Force
+  return $true
+}
+
+function Get-DreamSkinDiagnosticSummary {
+  $stateRoot = Join-Path $env:LOCALAPPDATA 'CodexDreamSkin'
+  $themePaths = Get-DreamSkinThemePaths -StateRoot $stateRoot
+  $node = $null
+  $nodeError = $null
+  try { $node = Get-DreamSkinNodeRuntime } catch { $nodeError = $_.Exception.Message }
+
+  $codexInstalls = @()
+  $codexError = $null
+  try { $codexInstalls = @(Get-DreamSkinRegisteredCodexInstalls) } catch { $codexError = $_.Exception.Message }
+
+  $officialProcesses = @(Get-OfficialCodexProcesses)
+  $activeTheme = $null
+  $activeThemeError = $null
+  try {
+    if (Test-Path -LiteralPath $themePaths.Active -PathType Container) {
+      $loaded = Read-DreamSkinTheme -ThemeDirectory $themePaths.Active -SkipImageMetadata
+      $activeTheme = [pscustomobject]@{
+        id = "$($loaded.Theme.id)"
+        name = "$($loaded.Theme.name)"
+        image = "$($loaded.Theme.image)"
+        appearance = "$($loaded.Theme.appearance)"
+        taskMode = "$($loaded.Theme.art.taskMode)"
+        taskChrome = "$($loaded.Theme.art.taskChrome)"
+        fontFile = "$($loaded.Theme.typography.fontFile)"
+      }
+    }
+  } catch {
+    $activeThemeError = $_.Exception.Message
+  }
+
+  $savedThemeCount = 0
+  $savedThemeError = $null
+  try { $savedThemeCount = @(Get-DreamSkinSavedThemes -StateRoot $stateRoot -SkipImageMetadata).Count } catch { $savedThemeError = $_.Exception.Message }
+
+  $petRoot = Get-DreamSkinPetStoreRoot
+  $petCount = 0
+  if (Test-Path -LiteralPath $petRoot -PathType Container) {
+    $petCount = @(Get-ChildItem -LiteralPath $petRoot -Directory -ErrorAction SilentlyContinue).Count
+  }
+
+  $cdp = $null
+  $cdpError = $null
+  try {
+    if ($codexInstalls.Count -gt 0) {
+      $identity = Get-DreamSkinVerifiedCdpIdentity -Port $Port -Codex $codexInstalls[0]
+      $cdp = [pscustomobject]@{
+        port = $Port
+        available = $null -ne $identity
+        browser = if ($identity) { "$($identity.Browser)" } else { $null }
+        targetCount = if ($identity) { [int]$identity.TargetCount } else { 0 }
+      }
+    }
+  } catch {
+    $cdpError = $_.Exception.Message
+  }
+
+  return [pscustomobject]@{
+    generatedAt = (Get-Date).ToString('o')
+    packageRoot = $PackageRoot
+    appRoot = $AppRoot
+    windowsRoot = $WindowsRoot
+    outputsRoot = $OutputsRoot
+    stateRoot = $stateRoot
+    port = $Port
+    node = if ($node) { [pscustomobject]@{ version = $node.Version; path = $node.Path } } else { $null }
+    nodeError = $nodeError
+    codexInstalls = @($codexInstalls | ForEach-Object {
+      [pscustomobject]@{
+        version = "$($_.Version)"
+        packageFullName = "$($_.PackageFullName)"
+        executable = "$($_.Executable)"
+        appUserModelId = "$($_.AppUserModelId)"
+      }
+    })
+    codexError = $codexError
+    codexProcessCount = $officialProcesses.Count
+    activeTheme = $activeTheme
+    activeThemeError = $activeThemeError
+    savedThemeCount = $savedThemeCount
+    savedThemeError = $savedThemeError
+    petRoot = $petRoot
+    petCount = $petCount
+    cdp = $cdp
+    cdpError = $cdpError
+    files = [pscustomobject]@{
+      installScript = Test-Path -LiteralPath $InstallScript -PathType Leaf
+      startScript = Test-Path -LiteralPath $StartScript -PathType Leaf
+      restoreScript = Test-Path -LiteralPath $RestoreScript -PathType Leaf
+      verifyScript = Test-Path -LiteralPath $VerifyScript -PathType Leaf
+      themeScript = Test-Path -LiteralPath $ThemeScript -PathType Leaf
+      activeTheme = Test-Path -LiteralPath (Join-Path $themePaths.Active 'theme.json') -PathType Leaf
+      state = Test-Path -LiteralPath $themePaths.State -PathType Leaf
+      lastActionLog = Test-Path -LiteralPath $LogPath -PathType Leaf
+      guiCrashLog = Test-Path -LiteralPath $CrashLogPath -PathType Leaf
+    }
+  }
+}
+
+function New-DreamSkinSupportPackage {
   New-Item -ItemType Directory -Force -Path $OutputsRoot | Out-Null
   $stateRoot = Join-Path $env:LOCALAPPDATA 'CodexDreamSkin'
   New-Item -ItemType Directory -Force -Path $stateRoot | Out-Null
+  $themePaths = Get-DreamSkinThemePaths -StateRoot $stateRoot
+
+  $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+  $supportRoot = Join-Path $OutputsRoot "support-$stamp"
+  $zipPath = Join-Path $OutputsRoot "support-$stamp.zip"
+  if (Test-Path -LiteralPath $supportRoot) { Remove-Item -LiteralPath $supportRoot -Recurse -Force }
+  New-Item -ItemType Directory -Force -Path $supportRoot | Out-Null
+  New-Item -ItemType Directory -Force -Path (Join-Path $supportRoot 'logs') | Out-Null
+  New-Item -ItemType Directory -Force -Path (Join-Path $supportRoot 'state') | Out-Null
+  New-Item -ItemType Directory -Force -Path (Join-Path $supportRoot 'theme') | Out-Null
+
+  $summary = Get-DreamSkinDiagnosticSummary
+  $summaryJson = $summary | ConvertTo-Json -Depth 8
+  [System.IO.File]::WriteAllText((Join-Path $supportRoot 'environment.json'), $summaryJson + [Environment]::NewLine, (New-Object System.Text.UTF8Encoding -ArgumentList $false))
+
+  $report = @(
+    '# Codex Dream Skin support package'
+    ''
+    "Generated: $($summary.generatedAt)"
+    "Codex installed: $($summary.codexInstalls.Count -gt 0)"
+    "Codex version: $(if ($summary.codexInstalls.Count -gt 0) { $summary.codexInstalls[0].version } else { 'not found' })"
+    "Codex running processes: $($summary.codexProcessCount)"
+    "Node: $(if ($summary.node) { $summary.node.version } else { 'not found' })"
+    "Active theme: $(if ($summary.activeTheme) { $summary.activeTheme.name } else { 'not readable' })"
+    "Saved themes: $($summary.savedThemeCount)"
+    "Local pets: $($summary.petCount)"
+    "CDP on port ${Port}: $(if ($summary.cdp -and $summary.cdp.available) { 'ok' } else { 'not verified' })"
+    ''
+    'Send this zip to the seller when install, start, theme import, or pet import fails.'
+  ) -join [Environment]::NewLine
+  [System.IO.File]::WriteAllText((Join-Path $supportRoot 'README.txt'), $report + [Environment]::NewLine, (New-Object System.Text.UTF8Encoding -ArgumentList $false))
+
+  $null = Copy-DreamSkinDiagnosticFile -Source $LogPath -DestinationDirectory (Join-Path $supportRoot 'logs')
+  $null = Copy-DreamSkinDiagnosticFile -Source $CrashLogPath -DestinationDirectory (Join-Path $supportRoot 'logs')
+  $null = Copy-DreamSkinDiagnosticFile -Source $themePaths.State -DestinationDirectory (Join-Path $supportRoot 'state')
+  $null = Copy-DreamSkinDiagnosticFile -Source (Join-Path $themePaths.Active 'theme.json') -DestinationDirectory (Join-Path $supportRoot 'theme')
+
+  $latestScreenshots = @(Get-ChildItem -LiteralPath $OutputsRoot -Filter 'verify-*.png' -File -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime -Descending | Select-Object -First 2)
+  if ($latestScreenshots.Count -gt 0) {
+    $screenshotsDir = Join-Path $supportRoot 'screenshots'
+    New-Item -ItemType Directory -Force -Path $screenshotsDir | Out-Null
+    foreach ($shot in $latestScreenshots) { Copy-Item -LiteralPath $shot.FullName -Destination $screenshotsDir -Force }
+  }
+
+  if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath -Force }
+  Compress-Archive -LiteralPath $supportRoot -DestinationPath $zipPath -Force
+  return [pscustomobject]@{ Folder = $supportRoot; Zip = $zipPath; Summary = $summary }
+}
+
+function Open-Logs {
+  $support = New-DreamSkinSupportPackage
   Start-Process explorer.exe $OutputsRoot
   Start-Process explorer.exe $stateRoot
+  return "售后诊断包已生成：$($support.Zip)`r`n`r`n把这个 zip 发给卖家即可排查。"
 }
 
 Assert-PackageReady
@@ -1404,7 +1568,7 @@ $buttonSpecs = @(
   @{ Text = $Text.buttonDefaultImage; Action = { Invoke-GuiAction $Text.busyDefaultImage $Text.doneDefaultImage { Restore-DefaultImage } } },
   @{ Text = $Text.buttonRestore; Action = { Restore-Official } },
   @{ Text = $Text.buttonUninstall; Action = { Uninstall-Skin } },
-  @{ Text = $Text.buttonLogs; Action = { Open-Logs } }
+  @{ Text = '日志 / 售后诊断'; Action = { Invoke-GuiAction '正在生成售后诊断包...' '售后诊断包已生成。' { Open-Logs } } }
 )
 
 for ($index = 0; $index -lt $buttonSpecs.Count; $index++) {
