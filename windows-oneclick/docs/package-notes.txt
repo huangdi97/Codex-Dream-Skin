@@ -78,6 +78,9 @@ Compatibility changes applied to the packaged Windows copy:
   RemoteSigned shortcut launchers, Store package activation, CDP message
   validation, safer screenshot capture, nested desktop TOML preservation, and
   title/menu readability fixes.
+- Upstream Windows fixes through a1bf261 were selectively ported, keeping the
+  skin active while Codex collapses the sidebar and allowing the tray helper to
+  add the first disabled menu item.
 
 Validation:
 - skin-manager-gui.ps1 PowerShell parser check passed.
