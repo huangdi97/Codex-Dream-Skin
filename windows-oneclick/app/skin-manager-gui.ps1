@@ -156,6 +156,54 @@ function Assert-DreamSkinRelativePetPath {
   }
 }
 
+function Get-DreamSkinImageDimensions {
+  param([Parameter(Mandatory = $true)][string]$Path)
+
+  $bytes = [System.IO.File]::ReadAllBytes($Path)
+  if ($bytes.Length -ge 24 -and
+    $bytes[0] -eq 0x89 -and $bytes[1] -eq 0x50 -and $bytes[2] -eq 0x4e -and $bytes[3] -eq 0x47 -and
+    [System.Text.Encoding]::ASCII.GetString($bytes, 12, 4) -eq 'IHDR') {
+    $width = ($bytes[16] -shl 24) -bor ($bytes[17] -shl 16) -bor ($bytes[18] -shl 8) -bor $bytes[19]
+    $height = ($bytes[20] -shl 24) -bor ($bytes[21] -shl 16) -bor ($bytes[22] -shl 8) -bor $bytes[23]
+    return [pscustomobject]@{ Width = $width; Height = $height }
+  }
+
+  if ($bytes.Length -ge 30 -and
+    [System.Text.Encoding]::ASCII.GetString($bytes, 0, 4) -eq 'RIFF' -and
+    [System.Text.Encoding]::ASCII.GetString($bytes, 8, 4) -eq 'WEBP') {
+    $offset = 12
+    while ($offset + 8 -le $bytes.Length) {
+      $chunk = [System.Text.Encoding]::ASCII.GetString($bytes, $offset, 4)
+      $size = [BitConverter]::ToUInt32($bytes, $offset + 4)
+      $data = $offset + 8
+      if ($data + $size -gt $bytes.Length) { break }
+      if ($chunk -eq 'VP8X' -and $size -ge 10) {
+        $width = 1 + $bytes[$data + 4] + ($bytes[$data + 5] -shl 8) + ($bytes[$data + 6] -shl 16)
+        $height = 1 + $bytes[$data + 7] + ($bytes[$data + 8] -shl 8) + ($bytes[$data + 9] -shl 16)
+        return [pscustomobject]@{ Width = $width; Height = $height }
+      }
+      if ($chunk -eq 'VP8 ' -and $size -ge 10 -and
+        $bytes[$data + 3] -eq 0x9d -and $bytes[$data + 4] -eq 0x01 -and $bytes[$data + 5] -eq 0x2a) {
+        $width = [BitConverter]::ToUInt16($bytes, $data + 6) -band 0x3fff
+        $height = [BitConverter]::ToUInt16($bytes, $data + 8) -band 0x3fff
+        return [pscustomobject]@{ Width = $width; Height = $height }
+      }
+      if ($chunk -eq 'VP8L' -and $size -ge 5 -and $bytes[$data] -eq 0x2f) {
+        $b1 = $bytes[$data + 1]
+        $b2 = $bytes[$data + 2]
+        $b3 = $bytes[$data + 3]
+        $b4 = $bytes[$data + 4]
+        $width = 1 + (($b2 -band 0x3f) -shl 8) + $b1
+        $height = 1 + (($b4 -band 0x0f) -shl 10) + ($b3 -shl 2) + (($b2 -band 0xc0) -shr 6)
+        return [pscustomobject]@{ Width = $width; Height = $height }
+      }
+      $offset += 8 + $size + ($size % 2)
+    }
+  }
+
+  throw '无法读取桌宠 sprite sheet 尺寸，请使用透明 PNG 或 WebP。'
+}
+
 function Import-DreamSkinPetPackage {
   param([Parameter(Mandatory = $true)][string]$PetDir)
 
@@ -177,6 +225,10 @@ function Import-DreamSkinPetPackage {
   if (@('.png', '.webp') -notcontains $extension) { throw 'Pet spritesheet must be a transparent PNG or WebP file.' }
   $spriteItem = Get-Item -LiteralPath $spriteSource
   if ($spriteItem.Length -gt 20MB) { throw 'Pet spritesheet must be 20 MB or smaller.' }
+  $dimensions = Get-DreamSkinImageDimensions -Path $spriteSource
+  if ($dimensions.Width -ne 1536 -or $dimensions.Height -ne 1872) {
+    throw "桌宠 sprite sheet 尺寸必须是 1536 x 1872；当前是 $($dimensions.Width) x $($dimensions.Height)。"
+  }
 
   $storeRoot = Get-DreamSkinPetStoreRoot
   $targetDir = Join-Path $storeRoot $petId
@@ -193,7 +245,9 @@ function Import-DreamSkinPetPackage {
     description = $description
     spritesheetPath = $spriteName
   }
-  $normalized | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $targetDir 'pet.json') -Encoding UTF8
+  $petJson = ($normalized | ConvertTo-Json -Depth 6) + [Environment]::NewLine
+  $utf8NoBom = New-Object System.Text.UTF8Encoding -ArgumentList $false
+  [System.IO.File]::WriteAllText((Join-Path $targetDir 'pet.json'), $petJson, $utf8NoBom)
 
   try { Start-Process 'codex://settings' | Out-Null } catch {}
   return "桌宠已导入：$displayName`r`n位置：$targetDir`r`n请在 Codex 设置 > Pets 里点击 Refresh，然后选择这个桌宠；需要显示/隐藏时输入 /pet。"
@@ -726,7 +780,7 @@ function Select-ThemePackage {
 
 function Select-PetPackage {
   $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
-  $dialog.Description = '选择桌宠文件夹，或选择包含 pet 子文件夹的角色套装'
+  $dialog.Description = '选择角色套装文件夹，或选择单独桌宠文件夹'
   $defaultThemes = Join-Path $OutputsRoot 'themes'
   if (Test-Path -LiteralPath $defaultThemes -PathType Container) { $dialog.SelectedPath = $defaultThemes }
   try {
@@ -736,8 +790,14 @@ function Select-PetPackage {
     $dialog.Dispose()
   }
 
+  if (Test-Path -LiteralPath (Join-Path $selected 'theme.json') -PathType Leaf) {
+    $result = Import-ExplicitTheme -ThemeDir $selected
+    $restart = Restart-DreamSkinAfterThemeChange
+    return "角色套装已导入。`r`n`r`n$result`r`n`r`n$restart"
+  }
+
   $petSource = Get-DreamSkinPetSourceFromPackage -PackageDir $selected
-  if (-not $petSource) { throw "没有找到桌宠文件。请选择包含 pet.json 和 spritesheet.png/webp 的桌宠文件夹，或包含 pet\pet.json 的角色套装文件夹。" }
+  if (-not $petSource) { throw "没有找到角色套装或桌宠文件。请选择包含 theme.json 的角色套装文件夹，或包含 pet.json 和 spritesheet.png/webp 的桌宠文件夹。" }
   return Import-DreamSkinPetPackage -PetDir $petSource
 }
 
@@ -1139,7 +1199,7 @@ $buttonSpecs = @(
   @{ Text = $Text.buttonImage; Action = { Invoke-GuiAction $Text.busyImage $Text.doneImage { Select-CustomImage } } },
   @{ Text = (Get-TextValue -Name 'buttonMakeTheme' -Default '一键制作主题'); Action = { Invoke-GuiAction '正在制作主题...' '主题制作完成。' { New-OneClickTheme } } },
   @{ Text = (Get-TextValue -Name 'buttonTheme' -Default '主题库 / 导入主题'); Action = { Invoke-GuiAction 'Applying theme...' 'Theme applied.' { Select-ThemePackage } } },
-  @{ Text = (Get-TextValue -Name 'buttonPet' -Default '桌宠 / 角色套装'); Action = { Invoke-GuiAction '正在导入桌宠...' '桌宠导入完成。' { Select-PetPackage } } },
+  @{ Text = (Get-TextValue -Name 'buttonPet' -Default '一键导入角色套装'); Action = { Invoke-GuiAction '正在导入角色套装...' '角色套装导入完成。' { Select-PetPackage } } },
   @{ Text = $Text.buttonDefaultImage; Action = { Invoke-GuiAction $Text.busyDefaultImage $Text.doneDefaultImage { Restore-DefaultImage } } },
   @{ Text = $Text.buttonRestore; Action = { Restore-Official } },
   @{ Text = $Text.buttonUninstall; Action = { Uninstall-Skin } },

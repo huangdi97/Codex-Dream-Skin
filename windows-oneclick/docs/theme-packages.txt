@@ -77,10 +77,12 @@ Optional role-suite pet:
 - A matching desktop pet can be bundled as pet\pet.json plus
   pet\spritesheet.png or pet\spritesheet.webp.
 - The GUI imports this pet automatically when an external theme folder contains
-  pet\pet.json. You can also click "Pet / role suite" and select the pet folder
-  directly.
+  pet\pet.json. Buyers can click "Import role suite" and select the role-suite
+  folder once; the GUI applies the theme and imports the pet together.
 - Codex Pets expects a transparent PNG or WebP sprite sheet. The official app
   upload size is exactly 1536 x 1872 pixels and no larger than 20 MB.
+- The one-click GUI checks this sprite-sheet size before copying the pet so bad
+  packages fail with a clear dimension message.
 - After import, open Codex Settings > Pets, click Refresh, then select the pet.
   Use /pet inside Codex to wake or hide it.
 

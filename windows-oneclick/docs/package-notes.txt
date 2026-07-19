@@ -54,6 +54,9 @@ Compatibility changes applied to the packaged Windows copy:
 - app/skin-manager-gui.ps1 can import Codex desktop Pets packages from a
   pet.json + spritesheet.png/webp folder, and can auto-import a matching pet
   from role-suite theme folders that contain pet\pet.json.
+- The role-suite button now applies a selected theme folder and imports its
+  bundled pet in one flow, with PNG/WebP sprite-sheet dimension validation for
+  the official 1536 x 1872 pet atlas size.
 - README.txt, docs/seller-sop.txt, and docs/theme-packages.txt document the
   theme + font + pet role-suite delivery format for buyer customization orders.
 - The GUI no longer treats a blank PowerShell ExitCode with empty stderr as a
