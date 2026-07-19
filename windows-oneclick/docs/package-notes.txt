@@ -60,6 +60,11 @@ Compatibility changes applied to the packaged Windows copy:
 - The role-suite entry is now a pet maker wizard that can copy a Codex
   `$hatch-pet` prompt, open Codex Pets settings, launch the official HTTPS pet
   install flow, import local role suites, or open the user's local pet folder.
+- The pet maker wizard now includes a pet check flow for validating local
+  pet.json + sprite packages before delivery.
+- app/skin-manager-gui.ps1 now includes a seller-facing role-suite packager
+  that writes buyer-ready theme + font + optional pet folders and zips under
+  outputs/role-suites.
 - The GUI "Logs / support diagnostics" action now creates a support zip with
   Dream Skin logs, state, environment summary, Codex and Node version details,
   active-theme metadata, local pet counts, CDP status, and recent verification

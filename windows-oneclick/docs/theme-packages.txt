@@ -8,6 +8,14 @@ Easiest way:
   image. The one-click maker compresses the image to a stable JPG theme asset
   and opens a verification screenshot after apply.
 
+Seller suite packaging:
+
+  Open the one-click manager, click "Role suite packager", then choose the same
+  theme options plus an optional pet folder. The packager writes a buyer-ready
+  suite folder and zip under:
+
+  outputs\role-suites\
+
 The generated theme folder is saved under:
 
   outputs\themes\<theme-id>\
@@ -87,6 +95,8 @@ Optional role-suite pet:
   upload size is exactly 1536 x 1872 pixels and no larger than 20 MB.
 - The one-click GUI checks this sprite-sheet size before copying the pet so bad
   packages fail with a clear dimension message.
+- The pet maker wizard also has a pet check action that validates pet.json,
+  sprite path, file type, file size, and sprite dimensions before delivery.
 - After import, open Codex Settings > Pets, click Refresh, then select the pet.
   Use /pet inside Codex to wake or hide it.
 
@@ -100,14 +110,14 @@ Minimal pet.json:
 }
 
 Seller workflow for a requested person/character:
-1. Use "Make theme".
+1. Use "Role suite packager" for paid delivery, or "Make theme" for a simple
+   single theme.
 2. Enter a theme name and select one image.
-3. Optionally select a custom font file.
-4. Find the generated folder under outputs\themes.
-5. To sell a role suite, add a pet folder containing pet.json and a valid
-   spritesheet.webp to the generated theme folder.
-6. Send that generated folder to the buyer, or import it with the theme library.
-7. If needed, adjust theme.json fields such as name, appearance,
+3. Optionally select a custom font file and a pet folder.
+4. Find the generated zip under outputs\role-suites.
+5. Send that zip to the buyer, or import the generated folder with the theme
+   library.
+6. If needed, adjust theme.json fields such as name, appearance,
    palette.accent, palette.text, palette.textMuted, typography.fontFamily,
    typography.fontFile, art.focusX, art.focusY, art.safeArea, art.taskMode,
    and art.taskChrome.

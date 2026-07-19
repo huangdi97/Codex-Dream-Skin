@@ -27,20 +27,22 @@
 1. 基础换图单：让买家提供 PNG/JPG/JPEG/WEBP，使用“换自己的图片”。系统会自动套用全窗口自适应布局。
 2. 小白自助单：让买家点“一键制作主题”，输入主题名，选择控件配色、字体/字体文件、字体颜色、明暗模式、首页文字遮罩、任务背景和任务控件遮罩，预览图片并确认。程序会自动压缩图片、生成主题文件夹、保存到本机主题库、立即应用，并打开效果截图。
 3. 指定人物/角色单：卖家也可以用“一键制作主题”先生成文件夹，再把 outputs\themes 里的主题文件夹发给买家导入。
-4. 主题命名建议：用买家能认出的名字，例如 Arina Hashimoto Theme、Customer Idol Theme、Anime Blue Theme。
-5. 想微调构图时，改 theme.json 的 art.focusX、art.focusY、art.safeArea、art.taskMode、art.taskChrome；控件配色主要改 palette.accent；字体和字体颜色改 typography.fontFamily、typography.fontFile、palette.text、palette.textMuted。
+4. 成品交付单：用“角色套装打包器”选择背景图、配色、字体和可选桌宠，自动生成 outputs\role-suites 下的角色套装 zip。
+5. 主题命名建议：用买家能认出的名字，例如 Arina Hashimoto Theme、Customer Idol Theme、Anime Blue Theme。
+6. 想微调构图时，改 theme.json 的 art.focusX、art.focusY、art.safeArea、art.taskMode、art.taskChrome；控件配色主要改 palette.accent；字体和字体颜色改 typography.fontFamily、typography.fontFile、palette.text、palette.textMuted。
 
 桌宠 / 角色套装流程：
 1. 桌宠属于 Codex/ChatGPT 桌面端的 Pets 功能，皮肤包负责导入，不负责改变 Codex 任务能力。
 2. 小白自助做桌宠：让买家点击“桌宠制作向导”，填写名字和描述，点击“复制 AI 制作提示词”，再到 Codex 里粘贴发送。
 3. 官方创建入口：向导里的“打开 Pets 设置”会打开 Codex 设置，买家可进入 Pets 选择 Create your own pet 或 Refresh。
 4. 在线安装：如果卖家提供 HTTPS 图片或 sprite sheet 链接，买家在向导里填写链接并点击“安装在线桌宠”。
-5. 单独桌宠交付：一个文件夹里放 pet.json 和 spritesheet.png 或 spritesheet.webp。
-6. 角色套装交付：主题文件夹里放 theme.json、主题图片、可选字体文件，再放 pet\pet.json 和 pet\spritesheet.webp。
-7. sprite sheet 官方规格：透明 PNG 或 WebP，1536 x 1872，20 MB 以内。
-8. 买家在向导里点击“导入角色套装/本地桌宠”选择该文件夹，主题、字体、桌宠会一起导入；导入后到 Codex 设置 > Pets 点击 Refresh，选择新桌宠；需要显示/隐藏时输入 /pet。
-9. 程序会检查 sprite sheet 是否是 1536 x 1872，不合格会直接提示当前尺寸，方便卖家返工。
-10. 如果买家只提供普通角色图片，只能先做皮肤主题；要做会动的桌宠，需要另外制作 9 行状态动画 sprite sheet。
+5. 桌宠体检：向导里点击“桌宠体检”，可以检查 pet.json、sprite 路径、格式、尺寸和大小。
+6. 单独桌宠交付：一个文件夹里放 pet.json 和 spritesheet.png 或 spritesheet.webp。
+7. 角色套装交付：主题文件夹里放 theme.json、主题图片、可选字体文件，再放 pet\pet.json 和 pet\spritesheet.webp。
+8. sprite sheet 官方规格：透明 PNG 或 WebP，1536 x 1872，20 MB 以内。
+9. 买家在向导里点击“导入角色套装/本地桌宠”选择该文件夹，主题、字体、桌宠会一起导入；导入后到 Codex 设置 > Pets 点击 Refresh，选择新桌宠；需要显示/隐藏时输入 /pet。
+10. 程序会检查 sprite sheet 是否是 1536 x 1872，不合格会直接提示当前尺寸，方便卖家返工。
+11. 如果买家只提供普通角色图片，只能先做皮肤主题；要做会动的桌宠，需要另外制作 9 行状态动画 sprite sheet。
 
 售后话术：
 - Codex 更新后皮肤消失：重新运行“安装 / 修复”。
@@ -54,6 +56,6 @@
 - 不想用了：点击“恢复官方外观”，再点击“卸载快捷方式”。
 
 商品说明建议：
-Codex 桌面端第三方主题美化安装包，图形界面一键安装、一键启动、自定义图片、一键制作主题、自适应主题导入、桌宠制作向导、角色套装导入、售后诊断包、一键恢复官方外观。非 OpenAI 官方产品，不提供账号，不索要密码或 API Key，不修改官方安装包。
+Codex 桌面端第三方主题美化安装包，图形界面一键安装、一键启动、自定义图片、一键制作主题、角色套装打包器、自适应主题导入、桌宠制作向导、桌宠体检、角色套装导入、售后诊断包、一键恢复官方外观。非 OpenAI 官方产品，不提供账号，不索要密码或 API Key，不修改官方安装包。
 
 

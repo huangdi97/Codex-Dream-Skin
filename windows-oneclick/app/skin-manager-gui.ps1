@@ -163,8 +163,8 @@ function Get-DreamSkinImageDimensions {
   if ($bytes.Length -ge 24 -and
     $bytes[0] -eq 0x89 -and $bytes[1] -eq 0x50 -and $bytes[2] -eq 0x4e -and $bytes[3] -eq 0x47 -and
     [System.Text.Encoding]::ASCII.GetString($bytes, 12, 4) -eq 'IHDR') {
-    $width = ($bytes[16] -shl 24) -bor ($bytes[17] -shl 16) -bor ($bytes[18] -shl 8) -bor $bytes[19]
-    $height = ($bytes[20] -shl 24) -bor ($bytes[21] -shl 16) -bor ($bytes[22] -shl 8) -bor $bytes[23]
+    $width = ([int]$bytes[16] * 16777216) + ([int]$bytes[17] * 65536) + ([int]$bytes[18] * 256) + [int]$bytes[19]
+    $height = ([int]$bytes[20] * 16777216) + ([int]$bytes[21] * 65536) + ([int]$bytes[22] * 256) + [int]$bytes[23]
     return [pscustomobject]@{ Width = $width; Height = $height }
   }
 
@@ -204,7 +204,7 @@ function Get-DreamSkinImageDimensions {
   throw '无法读取桌宠 sprite sheet 尺寸，请使用透明 PNG 或 WebP。'
 }
 
-function Import-DreamSkinPetPackage {
+function Get-DreamSkinPetPackageInfo {
   param([Parameter(Mandatory = $true)][string]$PetDir)
 
   if (-not (Test-Path -LiteralPath $PetDir -PathType Container)) { throw "Pet folder not found: $PetDir" }
@@ -230,19 +230,38 @@ function Import-DreamSkinPetPackage {
     throw "桌宠 sprite sheet 尺寸必须是 1536 x 1872；当前是 $($dimensions.Width) x $($dimensions.Height)。"
   }
 
+  return [pscustomobject]@{
+    SourceDir = $PetDir
+    PetJsonPath = $petJsonPath
+    Id = $petId
+    DisplayName = $displayName
+    Description = $description
+    SpriteSource = $spriteSource
+    SpriteExtension = $extension
+    SpriteLength = $spriteItem.Length
+    Width = $dimensions.Width
+    Height = $dimensions.Height
+  }
+}
+
+function Import-DreamSkinPetPackage {
+  param([Parameter(Mandatory = $true)][string]$PetDir)
+
+  $petInfo = Get-DreamSkinPetPackageInfo -PetDir $PetDir
+
   $storeRoot = Get-DreamSkinPetStoreRoot
-  $targetDir = Join-Path $storeRoot $petId
+  $targetDir = Join-Path $storeRoot $petInfo.Id
   if (-not (Test-Path -LiteralPath $targetDir -PathType Container)) {
     $null = New-Item -ItemType Directory -Path $targetDir -Force
   }
 
-  $spriteName = 'spritesheet' + $extension
-  Copy-Item -LiteralPath $spriteSource -Destination (Join-Path $targetDir $spriteName) -Force
+  $spriteName = 'spritesheet' + $petInfo.SpriteExtension
+  Copy-Item -LiteralPath $petInfo.SpriteSource -Destination (Join-Path $targetDir $spriteName) -Force
 
   $normalized = [ordered]@{
-    id = $petId
-    displayName = $displayName
-    description = $description
+    id = $petInfo.Id
+    displayName = $petInfo.DisplayName
+    description = $petInfo.Description
     spritesheetPath = $spriteName
   }
   $petJson = ($normalized | ConvertTo-Json -Depth 6) + [Environment]::NewLine
@@ -250,7 +269,7 @@ function Import-DreamSkinPetPackage {
   [System.IO.File]::WriteAllText((Join-Path $targetDir 'pet.json'), $petJson, $utf8NoBom)
 
   try { Start-Process 'codex://settings' | Out-Null } catch {}
-  return "桌宠已导入：$displayName`r`n位置：$targetDir`r`n请在 Codex 设置 > Pets 里点击 Refresh，然后选择这个桌宠；需要显示/隐藏时输入 /pet。"
+  return "桌宠已导入：$($petInfo.DisplayName)`r`n位置：$targetDir`r`n请在 Codex 设置 > Pets 里点击 Refresh，然后选择这个桌宠；需要显示/隐藏时输入 /pet。"
 }
 
 function Open-DreamSkinPetsSettings {
@@ -303,11 +322,26 @@ function Install-DreamSkinPetFromUrl {
   return '已打开 Codex 桌宠安装流程。如果没有反应，请确认当前 Codex 版本和账号已支持 Pets。'
 }
 
+function Test-DreamSkinPetPackageInteractive {
+  $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
+  $dialog.Description = '选择包含 pet.json 和 spritesheet.png/webp 的桌宠文件夹'
+  try {
+    if ($dialog.ShowDialog($form) -ne [System.Windows.Forms.DialogResult]::OK) { return $Text.cancelled }
+    $petSource = Get-DreamSkinPetSourceFromPackage -PackageDir $dialog.SelectedPath
+    if (-not $petSource) { throw '没有找到 pet.json。请选择桌宠文件夹，或包含 pet 子文件夹的角色套装。' }
+    $petInfo = Get-DreamSkinPetPackageInfo -PetDir $petSource
+    $sizeMb = [Math]::Round($petInfo.SpriteLength / 1MB, 2)
+    return "桌宠体检通过。`r`n`r`n名称：$($petInfo.DisplayName)`r`nID：$($petInfo.Id)`r`n尺寸：$($petInfo.Width) x $($petInfo.Height)`r`n大小：$sizeMb MB`r`n文件：$($petInfo.SpriteSource)"
+  } finally {
+    $dialog.Dispose()
+  }
+}
+
 function Show-PetMakerWizard {
   $dialog = New-Object System.Windows.Forms.Form
   $dialog.Text = '桌宠制作向导'
   $dialog.StartPosition = 'CenterParent'
-  $dialog.ClientSize = New-Object System.Drawing.Size(560, 430)
+  $dialog.ClientSize = New-Object System.Drawing.Size(560, 482)
   $dialog.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
   $dialog.MaximizeBox = $false
   $dialog.MinimizeBox = $false
@@ -386,15 +420,21 @@ function Show-PetMakerWizard {
   $importSuite.Size = New-Object System.Drawing.Size(202, 36)
   $dialog.Controls.Add($importSuite)
 
+  $testPet = New-Object System.Windows.Forms.Button
+  $testPet.Text = '桌宠体检'
+  $testPet.Location = New-Object System.Drawing.Point(238, 344)
+  $testPet.Size = New-Object System.Drawing.Size(128, 36)
+  $dialog.Controls.Add($testPet)
+
   $openFolder = New-Object System.Windows.Forms.Button
   $openFolder.Text = '打开本地桌宠文件夹'
-  $openFolder.Location = New-Object System.Drawing.Point(238, 344)
-  $openFolder.Size = New-Object System.Drawing.Size(172, 36)
+  $openFolder.Location = New-Object System.Drawing.Point(380, 344)
+  $openFolder.Size = New-Object System.Drawing.Size(130, 36)
   $dialog.Controls.Add($openFolder)
 
   $close = New-Object System.Windows.Forms.Button
   $close.Text = '关闭'
-  $close.Location = New-Object System.Drawing.Point(424, 344)
+  $close.Location = New-Object System.Drawing.Point(424, 400)
   $close.Size = New-Object System.Drawing.Size(86, 36)
   $dialog.Controls.Add($close)
 
@@ -431,6 +471,14 @@ function Show-PetMakerWizard {
   $importSuite.Add_Click({
     try {
       $script:PetWizardResult = Select-PetPackage
+      $dialog.Close()
+    } catch {
+      Show-Message $_.Exception.Message $Text.failedTitle ([System.Windows.Forms.MessageBoxIcon]::Error)
+    }
+  })
+  $testPet.Add_Click({
+    try {
+      $script:PetWizardResult = Test-DreamSkinPetPackageInteractive
       $dialog.Close()
     } catch {
       Show-Message $_.Exception.Message $Text.failedTitle ([System.Windows.Forms.MessageBoxIcon]::Error)
@@ -895,6 +943,165 @@ function New-OneClickTheme {
   }
 
   return "主题已制作并应用：$($active.Theme.name)`r`n主题文件夹：$themeDir`r`n强调色：$accent$verifyMessage`r`n`r`n$restart"
+}
+
+function Copy-DreamSkinPetToRoleSuite {
+  param(
+    [Parameter(Mandatory = $true)][string]$PetDir,
+    [Parameter(Mandatory = $true)][string]$SuiteDir
+  )
+
+  $petInfo = Get-DreamSkinPetPackageInfo -PetDir $PetDir
+  $targetDir = Join-Path $SuiteDir 'pet'
+  New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
+  $spriteName = 'spritesheet' + $petInfo.SpriteExtension
+  Copy-Item -LiteralPath $petInfo.SpriteSource -Destination (Join-Path $targetDir $spriteName) -Force
+
+  $normalized = [ordered]@{
+    id = $petInfo.Id
+    displayName = $petInfo.DisplayName
+    description = $petInfo.Description
+    spritesheetPath = $spriteName
+  }
+  $petJson = ($normalized | ConvertTo-Json -Depth 6) + [Environment]::NewLine
+  $utf8NoBom = New-Object System.Text.UTF8Encoding -ArgumentList $false
+  [System.IO.File]::WriteAllText((Join-Path $targetDir 'pet.json'), $petJson, $utf8NoBom)
+  return $petInfo
+}
+
+function New-RoleSuitePackage {
+  $options = Show-ThemeOptionsDialog
+  if (-not $options) { return $Text.cancelled }
+  $name = $options.Name
+
+  $imageDialog = New-Object System.Windows.Forms.OpenFileDialog
+  $imageDialog.Title = '选择角色套装背景图'
+  $imageDialog.Filter = 'Image files (*.png;*.jpg;*.jpeg;*.webp)|*.png;*.jpg;*.jpeg;*.webp'
+  $imageDialog.Multiselect = $false
+  try {
+    if ($imageDialog.ShowDialog($form) -ne [System.Windows.Forms.DialogResult]::OK) { return $Text.cancelled }
+    if (-not (Show-ThemeImagePreview -ImagePath $imageDialog.FileName -ThemeName $name)) { return $Text.cancelled }
+    Assert-DreamSkinImageFile -Path $imageDialog.FileName
+
+    $fontSourcePath = $null
+    if ($options.FontFileRequested) {
+      $fontDialog = New-Object System.Windows.Forms.OpenFileDialog
+      $fontDialog.Title = '选择角色套装字体文件'
+      $fontDialog.Filter = 'Font files (*.ttf;*.otf;*.woff;*.woff2)|*.ttf;*.otf;*.woff;*.woff2'
+      $fontDialog.Multiselect = $false
+      try {
+        if ($fontDialog.ShowDialog($form) -ne [System.Windows.Forms.DialogResult]::OK) { return $Text.cancelled }
+        Assert-DreamSkinFontFile -Path $fontDialog.FileName
+        $fontSourcePath = $fontDialog.FileName
+      } finally {
+        $fontDialog.Dispose()
+      }
+    }
+
+    $petSourcePath = $null
+    $petChoice = [System.Windows.Forms.MessageBox]::Show(
+      '这个角色套装要包含桌宠吗？',
+      '角色套装打包器',
+      [System.Windows.Forms.MessageBoxButtons]::YesNoCancel,
+      [System.Windows.Forms.MessageBoxIcon]::Question
+    )
+    if ($petChoice -eq [System.Windows.Forms.DialogResult]::Cancel) { return $Text.cancelled }
+    if ($petChoice -eq [System.Windows.Forms.DialogResult]::Yes) {
+      $petDialog = New-Object System.Windows.Forms.FolderBrowserDialog
+      $petDialog.Description = '选择包含 pet.json 和 spritesheet.png/webp 的桌宠文件夹'
+      try {
+        if ($petDialog.ShowDialog($form) -ne [System.Windows.Forms.DialogResult]::OK) { return $Text.cancelled }
+        $petSourcePath = Get-DreamSkinPetSourceFromPackage -PackageDir $petDialog.SelectedPath
+        if (-not $petSourcePath) { throw '没有找到 pet.json。请选择桌宠文件夹，或包含 pet 子文件夹的角色套装。' }
+        $null = Get-DreamSkinPetPackageInfo -PetDir $petSourcePath
+      } finally {
+        $petDialog.Dispose()
+      }
+    }
+
+    $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+    $baseId = ConvertTo-SafeThemeId -Name $name
+    $suiteId = "$baseId-$stamp"
+    $exportRoot = Join-Path $OutputsRoot 'role-suites'
+    $suiteDir = Join-Path $exportRoot $suiteId
+    $zipPath = Join-Path $exportRoot "$suiteId.zip"
+    if (Test-Path -LiteralPath $suiteDir) { Remove-Item -LiteralPath $suiteDir -Recurse -Force }
+    New-Item -ItemType Directory -Force -Path $suiteDir | Out-Null
+
+    $imageName = 'background.jpg'
+    $imagePath = Join-Path $suiteDir $imageName
+    Save-ThemeImage -SourcePath $imageDialog.FileName -DestinationPath $imagePath
+
+    $fontFileName = $null
+    if ($fontSourcePath) {
+      $fontFileName = 'font' + [System.IO.Path]::GetExtension($fontSourcePath).ToLowerInvariant()
+      $fontPath = Join-Path $suiteDir $fontFileName
+      Copy-Item -LiteralPath $fontSourcePath -Destination $fontPath -Force
+      Assert-DreamSkinFontFile -Path $fontPath
+    }
+
+    $accent = if ($options.Accent) { $options.Accent } else { Get-ImageAccentHex -ImagePath $imagePath }
+    $theme = [ordered]@{
+      schemaVersion = 1
+      id = $suiteId
+      name = $name
+      image = $imageName
+      appearance = $options.Appearance
+      brandSubtitle = 'CODEX DREAM SKIN ROLE SUITE'
+      tagline = "$name 角色套装已就绪。"
+      statusText = 'ROLE SUITE ONLINE'
+      quote = 'CUSTOM CODEX SPACE'
+      art = [ordered]@{
+        focusX = 0.5
+        focusY = 0.42
+        safeArea = $options.SafeArea
+        taskMode = $options.TaskMode
+        taskChrome = $options.TaskChrome
+      }
+      palette = [ordered]@{
+        accent = $accent
+      }
+      typography = [ordered]@{
+        fontFamily = $options.FontFamily
+      }
+    }
+    if ($fontFileName) { $theme.typography.fontFile = $fontFileName }
+    if ($options.TextColor) { $theme.palette.text = $options.TextColor }
+    if ($options.MutedTextColor) { $theme.palette.textMuted = $options.MutedTextColor }
+    Write-DreamSkinTheme -ThemeDirectory $suiteDir -Theme ([pscustomobject]$theme)
+
+    $petSummary = '未包含桌宠'
+    if ($petSourcePath) {
+      $petInfo = Copy-DreamSkinPetToRoleSuite -PetDir $petSourcePath -SuiteDir $suiteDir
+      $petSummary = "$($petInfo.DisplayName) ($($petInfo.Width) x $($petInfo.Height))"
+    }
+
+    $readme = @(
+      "Codex Dream Skin 角色套装：$name"
+      ''
+      '买家使用方法：'
+      '1. 打开 Codex Dream Skin GUI。'
+      '2. 点击“桌宠制作向导”或“主题库 / 导入主题”。'
+      '3. 选择本文件夹；主题会自动应用，pet 子文件夹会自动导入桌宠。'
+      '4. 如果包含桌宠，导入后到 Codex 设置 > Pets 点击 Refresh 并选择它。'
+      ''
+      "主题 ID：$suiteId"
+      "强调色：$accent"
+      "桌宠：$petSummary"
+      ''
+      '说明：这是第三方角色套装，不是 OpenAI 官方资源。'
+    ) -join [Environment]::NewLine
+    $utf8NoBom = New-Object System.Text.UTF8Encoding -ArgumentList $false
+    [System.IO.File]::WriteAllText((Join-Path $suiteDir 'README.txt'), $readme + [Environment]::NewLine, $utf8NoBom)
+
+    New-Item -ItemType Directory -Force -Path $exportRoot | Out-Null
+    if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath -Force }
+    Compress-Archive -LiteralPath $suiteDir -DestinationPath $zipPath -Force
+    Start-Process explorer.exe $exportRoot
+    return "角色套装已生成。`r`n`r`n文件夹：$suiteDir`r`n压缩包：$zipPath`r`n桌宠：$petSummary`r`n`r`n把这个 zip 或文件夹发给买家即可。"
+  } finally {
+    $imageDialog.Dispose()
+  }
 }
 
 function Select-ThemePackage {
@@ -1481,8 +1688,8 @@ Assert-PackageReady
 $form = New-Object System.Windows.Forms.Form
 $form.Text = $Text.windowTitle
 $form.StartPosition = 'CenterScreen'
-$form.ClientSize = New-Object System.Drawing.Size(860, 660)
-$form.MinimumSize = New-Object System.Drawing.Size(860, 660)
+$form.ClientSize = New-Object System.Drawing.Size(860, 724)
+$form.MinimumSize = New-Object System.Drawing.Size(860, 724)
 $form.Font = New-Object System.Drawing.Font('Microsoft YaHei UI', 9)
 $form.BackColor = [System.Drawing.Color]::FromArgb(250, 247, 252)
 
@@ -1552,7 +1759,7 @@ function New-ActionGroup {
   )
   $panel = New-Object System.Windows.Forms.Panel
   $panel.Location = $Location
-  $panel.Size = New-Object System.Drawing.Size(252, 334)
+  $panel.Size = New-Object System.Drawing.Size(252, 398)
   $panel.BackColor = [System.Drawing.Color]::White
   $panel.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
   $form.Controls.Add($panel)
@@ -1574,12 +1781,12 @@ function New-ActionGroup {
 
   $layout = New-Object System.Windows.Forms.TableLayoutPanel
   $layout.Location = New-Object System.Drawing.Point(10, 88)
-  $layout.Size = New-Object System.Drawing.Size(230, 232)
+  $layout.Size = New-Object System.Drawing.Size(230, 296)
   $layout.ColumnCount = 1
-  $layout.RowCount = 4
+  $layout.RowCount = 5
   $layout.BackColor = $panel.BackColor
-  for ($i = 0; $i -lt 4; $i++) {
-    [void]$layout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Percent, 25)))
+  for ($i = 0; $i -lt 5; $i++) {
+    [void]$layout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Percent, 20)))
   }
   $panel.Controls.Add($layout)
   return $layout
@@ -1647,6 +1854,7 @@ $buttonSpecs = @(
   @{ Group = $createGroup; Text = '一键制作主题'; Tone = 'primary'; Description = '选择图片、配色、字体、遮罩，自动生成可导入主题。'; Action = { Invoke-GuiAction '正在制作主题...' '主题制作完成。' { New-OneClickTheme } } },
   @{ Group = $createGroup; Text = '主题库 / 导入主题'; Description = '选择本地主题库或卖家发来的主题文件夹。'; Action = { Invoke-GuiAction 'Applying theme...' 'Theme applied.' { Select-ThemePackage } } },
   @{ Group = $createGroup; Text = '桌宠制作向导'; Description = '复制 AI 桌宠提示词、打开 Pets、安装在线桌宠或导入本地桌宠。'; Action = { Invoke-GuiAction '正在处理桌宠...' '桌宠操作完成。' { Show-PetMakerWizard } } },
+  @{ Group = $createGroup; Text = '角色套装打包器'; Tone = 'primary'; Description = '卖家用：把主题、字体和桌宠打成买家可一键导入的角色套装。'; Action = { Invoke-GuiAction '正在打包角色套装...' '角色套装打包完成。' { New-RoleSuitePackage } } },
 
   @{ Group = $supportGroup; Text = '恢复默认主题'; Description = '恢复包内默认主题并刷新皮肤。'; Action = { Invoke-GuiAction $Text.busyDefaultImage $Text.doneDefaultImage { Restore-DefaultImage } } },
   @{ Group = $supportGroup; Text = '恢复官方外观'; Description = '撤销皮肤效果，回到 Codex 原始外观。'; Action = { Restore-Official } },
@@ -1664,14 +1872,14 @@ for ($index = 0; $index -lt $buttonSpecs.Count; $index++) {
 $noteLabel = New-Object System.Windows.Forms.Label
 $noteLabel.Text = $Text.safetyNote
 $noteLabel.ForeColor = [System.Drawing.Color]::FromArgb(120, 85, 125)
-$noteLabel.Location = New-Object System.Drawing.Point(34, 570)
+$noteLabel.Location = New-Object System.Drawing.Point(34, 634)
 $noteLabel.Size = New-Object System.Drawing.Size(792, 34)
 $form.Controls.Add($noteLabel)
 
 $fallbackLabel = New-Object System.Windows.Forms.Label
 $fallbackLabel.Text = $Text.fallbackNote
 $fallbackLabel.ForeColor = [System.Drawing.Color]::FromArgb(150, 110, 150)
-$fallbackLabel.Location = New-Object System.Drawing.Point(34, 608)
+$fallbackLabel.Location = New-Object System.Drawing.Point(34, 672)
 $fallbackLabel.Size = New-Object System.Drawing.Size(792, 24)
 $form.Controls.Add($fallbackLabel)
 
