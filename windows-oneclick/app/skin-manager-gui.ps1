@@ -253,6 +253,207 @@ function Import-DreamSkinPetPackage {
   return "桌宠已导入：$displayName`r`n位置：$targetDir`r`n请在 Codex 设置 > Pets 里点击 Refresh，然后选择这个桌宠；需要显示/隐藏时输入 /pet。"
 }
 
+function Open-DreamSkinPetsSettings {
+  try {
+    Start-Process 'codex://settings' | Out-Null
+    return '已打开 Codex 设置。请进入 Pets，选择 Create your own pet 或 Refresh。'
+  } catch {
+    return '请手动打开 Codex 设置 > Pets。'
+  }
+}
+
+function New-DreamSkinPetPrompt {
+  param(
+    [Parameter(Mandatory = $true)][string]$Name,
+    [Parameter(Mandatory = $true)][string]$Description
+  )
+
+  return @"
+请使用 `$hatch-pet 为 Codex/ChatGPT 桌面端制作一个自定义桌宠。
+
+桌宠名字：$Name
+角色/风格描述：$Description
+
+要求：
+- 做成 Codex-compatible animated pet。
+- 保持角色身份一致、轮廓清楚、适合小尺寸显示。
+- 包含 9 个状态：idle、running-right、running-left、waving、jumping、failed、waiting、running、review。
+- 最终输出 pet.json 和 spritesheet.webp。
+- spritesheet 必须是透明 WebP 或 PNG，尺寸 1536 x 1872，大小 20 MB 以内。
+- 完成后请告诉我最终桌宠文件夹路径，并给出预览和验证结果。
+"@
+}
+
+function Install-DreamSkinPetFromUrl {
+  param(
+    [Parameter(Mandatory = $true)][string]$Name,
+    [Parameter(Mandatory = $true)][string]$ImageUrl
+  )
+
+  $uri = $null
+  if (-not [System.Uri]::TryCreate($ImageUrl, [System.UriKind]::Absolute, [ref]$uri) -or
+    $uri.Scheme -cne 'https') {
+    throw '在线安装需要一个 HTTPS 图片或 sprite sheet 链接。'
+  }
+  if ([string]::IsNullOrWhiteSpace($Name)) { throw '请先填写桌宠名字。' }
+  $link = 'codex://pets/install?name={0}&imageUrl={1}' -f
+    [System.Uri]::EscapeDataString($Name.Trim()),
+    [System.Uri]::EscapeDataString($ImageUrl.Trim())
+  Start-Process $link | Out-Null
+  return '已打开 Codex 桌宠安装流程。如果没有反应，请确认当前 Codex 版本和账号已支持 Pets。'
+}
+
+function Show-PetMakerWizard {
+  $dialog = New-Object System.Windows.Forms.Form
+  $dialog.Text = '桌宠制作向导'
+  $dialog.StartPosition = 'CenterParent'
+  $dialog.ClientSize = New-Object System.Drawing.Size(560, 430)
+  $dialog.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
+  $dialog.MaximizeBox = $false
+  $dialog.MinimizeBox = $false
+  $dialog.Font = New-Object System.Drawing.Font('Microsoft YaHei UI', 9)
+
+  $title = New-Object System.Windows.Forms.Label
+  $title.Text = '小白流程：写名字和描述，复制提示词到 Codex 生成；已有套装可直接导入。'
+  $title.Location = New-Object System.Drawing.Point(18, 16)
+  $title.Size = New-Object System.Drawing.Size(520, 34)
+  $dialog.Controls.Add($title)
+
+  $nameLabel = New-Object System.Windows.Forms.Label
+  $nameLabel.Text = '桌宠名字'
+  $nameLabel.Location = New-Object System.Drawing.Point(18, 62)
+  $nameLabel.Size = New-Object System.Drawing.Size(90, 24)
+  $dialog.Controls.Add($nameLabel)
+
+  $nameBox = New-Object System.Windows.Forms.TextBox
+  $nameBox.Text = '我的桌宠'
+  $nameBox.Location = New-Object System.Drawing.Point(112, 60)
+  $nameBox.Size = New-Object System.Drawing.Size(410, 24)
+  $dialog.Controls.Add($nameBox)
+
+  $descriptionLabel = New-Object System.Windows.Forms.Label
+  $descriptionLabel.Text = '角色描述'
+  $descriptionLabel.Location = New-Object System.Drawing.Point(18, 98)
+  $descriptionLabel.Size = New-Object System.Drawing.Size(90, 24)
+  $dialog.Controls.Add($descriptionLabel)
+
+  $descriptionBox = New-Object System.Windows.Forms.TextBox
+  $descriptionBox.Multiline = $true
+  $descriptionBox.ScrollBars = [System.Windows.Forms.ScrollBars]::Vertical
+  $descriptionBox.Text = '一个适合 Codex 的可爱桌宠，风格干净，动作清楚，状态反馈明显。'
+  $descriptionBox.Location = New-Object System.Drawing.Point(112, 96)
+  $descriptionBox.Size = New-Object System.Drawing.Size(410, 96)
+  $dialog.Controls.Add($descriptionBox)
+
+  $urlLabel = New-Object System.Windows.Forms.Label
+  $urlLabel.Text = 'HTTPS 链接'
+  $urlLabel.Location = New-Object System.Drawing.Point(18, 210)
+  $urlLabel.Size = New-Object System.Drawing.Size(90, 24)
+  $dialog.Controls.Add($urlLabel)
+
+  $urlBox = New-Object System.Windows.Forms.TextBox
+  $urlBox.Location = New-Object System.Drawing.Point(112, 208)
+  $urlBox.Size = New-Object System.Drawing.Size(410, 24)
+  $dialog.Controls.Add($urlBox)
+
+  $hint = New-Object System.Windows.Forms.Label
+  $hint.Text = '如果已经有在线 sprite sheet 链接，可以直接安装；本地文件/整套文件夹用下面的导入按钮。'
+  $hint.Location = New-Object System.Drawing.Point(112, 238)
+  $hint.Size = New-Object System.Drawing.Size(410, 34)
+  $dialog.Controls.Add($hint)
+
+  $copyPrompt = New-Object System.Windows.Forms.Button
+  $copyPrompt.Text = '复制 AI 制作提示词'
+  $copyPrompt.Location = New-Object System.Drawing.Point(22, 292)
+  $copyPrompt.Size = New-Object System.Drawing.Size(160, 36)
+  $dialog.Controls.Add($copyPrompt)
+
+  $openPets = New-Object System.Windows.Forms.Button
+  $openPets.Text = '打开 Pets 设置'
+  $openPets.Location = New-Object System.Drawing.Point(196, 292)
+  $openPets.Size = New-Object System.Drawing.Size(150, 36)
+  $dialog.Controls.Add($openPets)
+
+  $installUrl = New-Object System.Windows.Forms.Button
+  $installUrl.Text = '安装在线桌宠'
+  $installUrl.Location = New-Object System.Drawing.Point(360, 292)
+  $installUrl.Size = New-Object System.Drawing.Size(150, 36)
+  $dialog.Controls.Add($installUrl)
+
+  $importSuite = New-Object System.Windows.Forms.Button
+  $importSuite.Text = '导入角色套装/本地桌宠'
+  $importSuite.Location = New-Object System.Drawing.Point(22, 344)
+  $importSuite.Size = New-Object System.Drawing.Size(202, 36)
+  $dialog.Controls.Add($importSuite)
+
+  $openFolder = New-Object System.Windows.Forms.Button
+  $openFolder.Text = '打开本地桌宠文件夹'
+  $openFolder.Location = New-Object System.Drawing.Point(238, 344)
+  $openFolder.Size = New-Object System.Drawing.Size(172, 36)
+  $dialog.Controls.Add($openFolder)
+
+  $close = New-Object System.Windows.Forms.Button
+  $close.Text = '关闭'
+  $close.Location = New-Object System.Drawing.Point(424, 344)
+  $close.Size = New-Object System.Drawing.Size(86, 36)
+  $dialog.Controls.Add($close)
+
+  $script:PetWizardResult = $Text.cancelled
+  $copyPrompt.Add_Click({
+    try {
+      $name = $nameBox.Text.Trim()
+      if ([string]::IsNullOrWhiteSpace($name)) { $name = '我的桌宠' }
+      $description = $descriptionBox.Text.Trim()
+      if ([string]::IsNullOrWhiteSpace($description)) { $description = '一个适合 Codex 的可爱桌宠。' }
+      [System.Windows.Forms.Clipboard]::SetText((New-DreamSkinPetPrompt -Name $name -Description $description))
+      $script:PetWizardResult = "AI 制作提示词已复制。`r`n请在 Codex 里粘贴发送；如果 Pets 里有 Create your own pet，也可以先打开官方创建流程。"
+      $dialog.Close()
+    } catch {
+      Show-Message $_.Exception.Message $Text.failedTitle ([System.Windows.Forms.MessageBoxIcon]::Error)
+    }
+  })
+  $openPets.Add_Click({
+    try {
+      $script:PetWizardResult = Open-DreamSkinPetsSettings
+      $dialog.Close()
+    } catch {
+      Show-Message $_.Exception.Message $Text.failedTitle ([System.Windows.Forms.MessageBoxIcon]::Error)
+    }
+  })
+  $installUrl.Add_Click({
+    try {
+      $script:PetWizardResult = Install-DreamSkinPetFromUrl -Name $nameBox.Text -ImageUrl $urlBox.Text
+      $dialog.Close()
+    } catch {
+      Show-Message $_.Exception.Message $Text.failedTitle ([System.Windows.Forms.MessageBoxIcon]::Error)
+    }
+  })
+  $importSuite.Add_Click({
+    try {
+      $script:PetWizardResult = Select-PetPackage
+      $dialog.Close()
+    } catch {
+      Show-Message $_.Exception.Message $Text.failedTitle ([System.Windows.Forms.MessageBoxIcon]::Error)
+    }
+  })
+  $openFolder.Add_Click({
+    try {
+      $root = Get-DreamSkinPetStoreRoot
+      if (-not (Test-Path -LiteralPath $root -PathType Container)) { $null = New-Item -ItemType Directory -Path $root -Force }
+      Start-Process -FilePath $root | Out-Null
+      $script:PetWizardResult = "已打开本地桌宠文件夹：$root"
+      $dialog.Close()
+    } catch {
+      Show-Message $_.Exception.Message $Text.failedTitle ([System.Windows.Forms.MessageBoxIcon]::Error)
+    }
+  })
+  $close.Add_Click({ $dialog.Close() })
+
+  [void]$dialog.ShowDialog($form)
+  $dialog.Dispose()
+  return $script:PetWizardResult
+}
+
 function Get-ImageAccentHex {
   param([Parameter(Mandatory = $true)][string]$ImagePath)
 
@@ -1199,7 +1400,7 @@ $buttonSpecs = @(
   @{ Text = $Text.buttonImage; Action = { Invoke-GuiAction $Text.busyImage $Text.doneImage { Select-CustomImage } } },
   @{ Text = (Get-TextValue -Name 'buttonMakeTheme' -Default '一键制作主题'); Action = { Invoke-GuiAction '正在制作主题...' '主题制作完成。' { New-OneClickTheme } } },
   @{ Text = (Get-TextValue -Name 'buttonTheme' -Default '主题库 / 导入主题'); Action = { Invoke-GuiAction 'Applying theme...' 'Theme applied.' { Select-ThemePackage } } },
-  @{ Text = (Get-TextValue -Name 'buttonPet' -Default '一键导入角色套装'); Action = { Invoke-GuiAction '正在导入角色套装...' '角色套装导入完成。' { Select-PetPackage } } },
+  @{ Text = (Get-TextValue -Name 'buttonPet' -Default '桌宠制作向导'); Action = { Invoke-GuiAction '正在处理桌宠...' '桌宠操作完成。' { Show-PetMakerWizard } } },
   @{ Text = $Text.buttonDefaultImage; Action = { Invoke-GuiAction $Text.busyDefaultImage $Text.doneDefaultImage { Restore-DefaultImage } } },
   @{ Text = $Text.buttonRestore; Action = { Restore-Official } },
   @{ Text = $Text.buttonUninstall; Action = { Uninstall-Skin } },
