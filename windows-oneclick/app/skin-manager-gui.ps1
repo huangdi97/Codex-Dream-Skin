@@ -99,7 +99,13 @@ function Import-ExplicitTheme {
   $loaded = Read-DreamSkinTheme -ThemeDirectory $ThemeDir
   $theme = $loaded.Theme | ConvertTo-Json -Depth 8 | ConvertFrom-Json
   $active = Set-DreamSkinActiveTheme -ImagePath $loaded.ImagePath -Theme $theme -FontPath $loaded.FontPath -StateRoot $paths.Root
-  return "Theme applied: $($active.Theme.name). If Codex is running, it will update shortly; otherwise start Dream Skin."
+  $message = "Theme applied: $($active.Theme.name). If Codex is running, it will update shortly; otherwise start Dream Skin."
+  $petSource = Get-DreamSkinPetSourceFromPackage -PackageDir $ThemeDir
+  if ($petSource) {
+    $petResult = Import-DreamSkinPetPackage -PetDir $petSource
+    $message += "`r`n`r`n$petResult"
+  }
+  return $message
 }
 
 function ConvertTo-SafeThemeId {
@@ -108,6 +114,89 @@ function ConvertTo-SafeThemeId {
   $safe = [regex]::Replace($lower, '[^a-z0-9]+', '-').Trim('-')
   if ([string]::IsNullOrWhiteSpace($safe)) { $safe = 'custom-theme' }
   return $safe
+}
+
+function Get-DreamSkinPetSourceFromPackage {
+  param([Parameter(Mandatory = $true)][string]$PackageDir)
+
+  $candidates = @(
+    $PackageDir,
+    (Join-Path $PackageDir 'pet')
+  )
+  $petsDir = Join-Path $PackageDir 'pets'
+  if (Test-Path -LiteralPath $petsDir -PathType Container) {
+    $candidates += @(Get-ChildItem -LiteralPath $petsDir -Directory -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
+  }
+
+  foreach ($candidate in $candidates) {
+    if (-not (Test-Path -LiteralPath $candidate -PathType Container)) { continue }
+    if (Test-Path -LiteralPath (Join-Path $candidate 'pet.json') -PathType Leaf) { return $candidate }
+  }
+  return $null
+}
+
+function Get-DreamSkinPetStoreRoot {
+  $profile = [Environment]::GetFolderPath([Environment+SpecialFolder]::UserProfile)
+  if ([string]::IsNullOrWhiteSpace($profile)) { $profile = $env:USERPROFILE }
+  if ([string]::IsNullOrWhiteSpace($profile)) { throw 'Cannot find the current user profile folder.' }
+  return (Join-Path $profile '.codex\pets')
+}
+
+function Assert-DreamSkinRelativePetPath {
+  param(
+    [Parameter(Mandatory = $true)][string]$Value,
+    [Parameter(Mandatory = $true)][string]$Field
+  )
+
+  if ([string]::IsNullOrWhiteSpace($Value)) { throw "Pet $Field is empty." }
+  if ([System.IO.Path]::IsPathRooted($Value)) { throw "Pet $Field must be a relative file name." }
+  $parts = $Value -split '[\\/]'
+  if ($parts | Where-Object { $_ -eq '..' -or [string]::IsNullOrWhiteSpace($_) }) {
+    throw "Pet $Field cannot contain parent directory references."
+  }
+}
+
+function Import-DreamSkinPetPackage {
+  param([Parameter(Mandatory = $true)][string]$PetDir)
+
+  if (-not (Test-Path -LiteralPath $PetDir -PathType Container)) { throw "Pet folder not found: $PetDir" }
+  $petJsonPath = Join-Path $PetDir 'pet.json'
+  if (-not (Test-Path -LiteralPath $petJsonPath -PathType Leaf)) { throw "Pet package must contain pet.json: $PetDir" }
+
+  $pet = (Read-DreamSkinUtf8File -Path $petJsonPath) | ConvertFrom-Json -ErrorAction Stop
+  $rawId = if ($pet.id) { [string]$pet.id } elseif ($pet.displayName) { [string]$pet.displayName } else { Split-Path -Leaf $PetDir }
+  $petId = ConvertTo-SafeThemeId -Name $rawId
+  $displayName = if ($pet.displayName) { [string]$pet.displayName } else { $petId }
+  $description = if ($pet.description) { [string]$pet.description } else { 'Imported by Codex Dream Skin.' }
+  $spriteRel = if ($pet.spritesheetPath) { [string]$pet.spritesheetPath } else { 'spritesheet.webp' }
+  Assert-DreamSkinRelativePetPath -Value $spriteRel -Field 'spritesheetPath'
+
+  $spriteSource = Join-Path $PetDir $spriteRel
+  if (-not (Test-Path -LiteralPath $spriteSource -PathType Leaf)) { throw "Pet spritesheet not found: $spriteSource" }
+  $extension = [System.IO.Path]::GetExtension($spriteSource).ToLowerInvariant()
+  if (@('.png', '.webp') -notcontains $extension) { throw 'Pet spritesheet must be a transparent PNG or WebP file.' }
+  $spriteItem = Get-Item -LiteralPath $spriteSource
+  if ($spriteItem.Length -gt 20MB) { throw 'Pet spritesheet must be 20 MB or smaller.' }
+
+  $storeRoot = Get-DreamSkinPetStoreRoot
+  $targetDir = Join-Path $storeRoot $petId
+  if (-not (Test-Path -LiteralPath $targetDir -PathType Container)) {
+    $null = New-Item -ItemType Directory -Path $targetDir -Force
+  }
+
+  $spriteName = 'spritesheet' + $extension
+  Copy-Item -LiteralPath $spriteSource -Destination (Join-Path $targetDir $spriteName) -Force
+
+  $normalized = [ordered]@{
+    id = $petId
+    displayName = $displayName
+    description = $description
+    spritesheetPath = $spriteName
+  }
+  $normalized | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $targetDir 'pet.json') -Encoding UTF8
+
+  try { Start-Process 'codex://settings' | Out-Null } catch {}
+  return "桌宠已导入：$displayName`r`n位置：$targetDir`r`n请在 Codex 设置 > Pets 里点击 Refresh，然后选择这个桌宠；需要显示/隐藏时输入 /pet。"
 }
 
 function Get-ImageAccentHex {
@@ -635,6 +724,23 @@ function Select-ThemePackage {
   return "$result`r`n`r`n$restart"
 }
 
+function Select-PetPackage {
+  $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
+  $dialog.Description = '选择桌宠文件夹，或选择包含 pet 子文件夹的角色套装'
+  $defaultThemes = Join-Path $OutputsRoot 'themes'
+  if (Test-Path -LiteralPath $defaultThemes -PathType Container) { $dialog.SelectedPath = $defaultThemes }
+  try {
+    if ($dialog.ShowDialog($form) -ne [System.Windows.Forms.DialogResult]::OK) { return $Text.cancelled }
+    $selected = $dialog.SelectedPath
+  } finally {
+    $dialog.Dispose()
+  }
+
+  $petSource = Get-DreamSkinPetSourceFromPackage -PackageDir $selected
+  if (-not $petSource) { throw "没有找到桌宠文件。请选择包含 pet.json 和 spritesheet.png/webp 的桌宠文件夹，或包含 pet\pet.json 的角色套装文件夹。" }
+  return Import-DreamSkinPetPackage -PetDir $petSource
+}
+
 function Assert-PackageReady {
   foreach ($path in @($InstallScript, $StartScript, $RestoreScript, $VerifyScript, $ThemeScript)) {
     if (-not (Test-Path -LiteralPath $path)) { throw ($Text.missingFile + $path) }
@@ -1033,6 +1139,7 @@ $buttonSpecs = @(
   @{ Text = $Text.buttonImage; Action = { Invoke-GuiAction $Text.busyImage $Text.doneImage { Select-CustomImage } } },
   @{ Text = (Get-TextValue -Name 'buttonMakeTheme' -Default '一键制作主题'); Action = { Invoke-GuiAction '正在制作主题...' '主题制作完成。' { New-OneClickTheme } } },
   @{ Text = (Get-TextValue -Name 'buttonTheme' -Default '主题库 / 导入主题'); Action = { Invoke-GuiAction 'Applying theme...' 'Theme applied.' { Select-ThemePackage } } },
+  @{ Text = (Get-TextValue -Name 'buttonPet' -Default '桌宠 / 角色套装'); Action = { Invoke-GuiAction '正在导入桌宠...' '桌宠导入完成。' { Select-PetPackage } } },
   @{ Text = $Text.buttonDefaultImage; Action = { Invoke-GuiAction $Text.busyDefaultImage $Text.doneDefaultImage { Restore-DefaultImage } } },
   @{ Text = $Text.buttonRestore; Action = { Restore-Official } },
   @{ Text = $Text.buttonUninstall; Action = { Uninstall-Skin } },

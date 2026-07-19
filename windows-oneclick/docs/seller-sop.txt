@@ -29,15 +29,24 @@
 4. 主题命名建议：用买家能认出的名字，例如 Arina Hashimoto Theme、Customer Idol Theme、Anime Blue Theme。
 5. 想微调构图时，改 theme.json 的 art.focusX、art.focusY、art.safeArea、art.taskMode、art.taskChrome；控件配色主要改 palette.accent；字体和字体颜色改 typography.fontFamily、typography.fontFile、palette.text、palette.textMuted。
 
+桌宠 / 角色套装流程：
+1. 桌宠属于 Codex/ChatGPT 桌面端的 Pets 功能，皮肤包负责导入，不负责改变 Codex 任务能力。
+2. 单独桌宠交付：一个文件夹里放 pet.json 和 spritesheet.png 或 spritesheet.webp。
+3. 角色套装交付：主题文件夹里放 theme.json、主题图片、可选字体文件，再放 pet\pet.json 和 pet\spritesheet.webp。
+4. sprite sheet 官方规格：透明 PNG 或 WebP，1536 x 1872，20 MB 以内。
+5. 买家点击“桌宠 / 角色套装”选择该文件夹，导入后到 Codex 设置 > Pets 点击 Refresh，选择新桌宠；需要显示/隐藏时输入 /pet。
+6. 如果买家只提供普通角色图片，只能先做皮肤主题；要做会动的桌宠，需要另外制作 9 行状态动画 sprite sheet。
+
 售后话术：
 - Codex 更新后皮肤消失：重新运行“安装 / 修复”。
 - 启动失败：关闭 Codex，运行 7 恢复，再运行 1 和 3。
 - 想换图：点击“换自己的图片”，选择 PNG/JPG/JPEG/WEBP 图片，程序会自动刷新皮肤。
 - 想自己做主题：点击“一键制作主题”，输入名称，选择控件配色、字体/字体文件、字体颜色、任务背景和任务控件遮罩，再选择图片。
 - 想要某个人/角色主题：点击“主题库 / 导入主题”，选择卖家发的主题文件夹，程序会自动刷新皮肤。
+- 想要桌宠：点击“桌宠 / 角色套装”，选择卖家发的桌宠或角色套装文件夹；导入后到 Codex 设置 > Pets 点击 Refresh 选择它。
 - 不想用了：点击“恢复官方外观”，再点击“卸载快捷方式”。
 
 商品说明建议：
-Codex 桌面端第三方主题美化安装包，图形界面一键安装、一键启动、自定义图片、一键制作主题、自适应主题导入、一键恢复官方外观。非 OpenAI 官方产品，不提供账号，不索要密码或 API Key，不修改官方安装包。
+Codex 桌面端第三方主题美化安装包，图形界面一键安装、一键启动、自定义图片、一键制作主题、自适应主题导入、桌宠/角色套装导入、一键恢复官方外观。非 OpenAI 官方产品，不提供账号，不索要密码或 API Key，不修改官方安装包。
 
 

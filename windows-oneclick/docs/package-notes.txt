@@ -51,6 +51,11 @@ Compatibility changes applied to the packaged Windows copy:
   font files inside a theme folder.
 - Theme JSON now supports art.taskChrome to control the top bar, content layer,
   and composer/input mask independently on task pages.
+- app/skin-manager-gui.ps1 can import Codex desktop Pets packages from a
+  pet.json + spritesheet.png/webp folder, and can auto-import a matching pet
+  from role-suite theme folders that contain pet\pet.json.
+- README.txt, docs/seller-sop.txt, and docs/theme-packages.txt document the
+  theme + font + pet role-suite delivery format for buyer customization orders.
 - The GUI no longer treats a blank PowerShell ExitCode with empty stderr as a
   failure, avoiding false "operation failed" messages after successful apply.
 - app/skin-manager.ps1 uses the same active-theme store as a fallback console

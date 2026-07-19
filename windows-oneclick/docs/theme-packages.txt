@@ -17,6 +17,7 @@ A theme is one folder containing:
   theme.json
   one image file referenced by theme.json
   optional font file referenced by theme.json
+  optional pet folder for a matching Codex desktop pet
 
 Example:
 
@@ -24,6 +25,9 @@ Example:
     theme.json
     arina.jpg
     font.ttf
+    pet\
+      pet.json
+      spritesheet.webp
 
 Minimal theme.json:
 
@@ -69,13 +73,35 @@ Rules:
 - typography.fontFile can reference a TTF, OTF, WOFF, or WOFF2 file in the same
   theme folder. Font files must be under 16 MB.
 
+Optional role-suite pet:
+- A matching desktop pet can be bundled as pet\pet.json plus
+  pet\spritesheet.png or pet\spritesheet.webp.
+- The GUI imports this pet automatically when an external theme folder contains
+  pet\pet.json. You can also click "Pet / role suite" and select the pet folder
+  directly.
+- Codex Pets expects a transparent PNG or WebP sprite sheet. The official app
+  upload size is exactly 1536 x 1872 pixels and no larger than 20 MB.
+- After import, open Codex Settings > Pets, click Refresh, then select the pet.
+  Use /pet inside Codex to wake or hide it.
+
+Minimal pet.json:
+
+{
+  "id": "arina-pet",
+  "displayName": "Arina Pet",
+  "description": "Imported by Codex Dream Skin.",
+  "spritesheetPath": "spritesheet.webp"
+}
+
 Seller workflow for a requested person/character:
 1. Use "Make theme".
 2. Enter a theme name and select one image.
 3. Optionally select a custom font file.
 4. Find the generated folder under outputs\themes.
-5. Send that generated folder to the buyer, or import it with the theme library.
-6. If needed, adjust theme.json fields such as name, appearance,
+5. To sell a role suite, add a pet folder containing pet.json and a valid
+   spritesheet.webp to the generated theme folder.
+6. Send that generated folder to the buyer, or import it with the theme library.
+7. If needed, adjust theme.json fields such as name, appearance,
    palette.accent, palette.text, palette.textMuted, typography.fontFamily,
    typography.fontFile, art.focusX, art.focusY, art.safeArea, art.taskMode,
    and art.taskChrome.
