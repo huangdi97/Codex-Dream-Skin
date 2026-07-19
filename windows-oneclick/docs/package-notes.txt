@@ -77,6 +77,10 @@ Compatibility changes applied to the packaged Windows copy:
 - Start-CodexDreamSkin-GUI.vbs exits explicitly after launching the GUI to
   avoid a stuck Windows Script Host process.
 - Start-CodexDreamSkin-GUI.vbs launches PowerShell in STA mode.
+- Start-CodexDreamSkin-GUI.vbs now shows clear startup failure messages when
+  the GUI script is missing or PowerShell cannot be launched.
+- app/skin-manager-gui.ps1 now uses a more polished grouped layout with Quick
+  Start, Personalize, and Restore / Support columns plus per-action tooltips.
 - app/skin-manager-gui.ps1 launches install/start/restore scripts as detached
   hidden background processes and writes action logs, avoiding GUI hangs from
   process output pipes or WinForms timers.

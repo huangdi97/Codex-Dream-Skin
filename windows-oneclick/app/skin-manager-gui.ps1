@@ -1469,6 +1469,7 @@ function New-DreamSkinSupportPackage {
 
 function Open-Logs {
   $support = New-DreamSkinSupportPackage
+  $stateRoot = Join-Path $env:LOCALAPPDATA 'CodexDreamSkin'
   Start-Process explorer.exe $OutputsRoot
   Start-Process explorer.exe $stateRoot
   return "售后诊断包已生成：$($support.Zip)`r`n`r`n把这个 zip 发给卖家即可排查。"
@@ -1480,69 +1481,149 @@ Assert-PackageReady
 $form = New-Object System.Windows.Forms.Form
 $form.Text = $Text.windowTitle
 $form.StartPosition = 'CenterScreen'
-$form.ClientSize = New-Object System.Drawing.Size(760, 590)
-$form.MinimumSize = New-Object System.Drawing.Size(760, 590)
+$form.ClientSize = New-Object System.Drawing.Size(860, 660)
+$form.MinimumSize = New-Object System.Drawing.Size(860, 660)
 $form.Font = New-Object System.Drawing.Font('Microsoft YaHei UI', 9)
-$form.BackColor = [System.Drawing.Color]::FromArgb(255, 248, 252)
+$form.BackColor = [System.Drawing.Color]::FromArgb(250, 247, 252)
+
+$headerPanel = New-Object System.Windows.Forms.Panel
+$headerPanel.Location = New-Object System.Drawing.Point(0, 0)
+$headerPanel.Size = New-Object System.Drawing.Size(860, 108)
+$headerPanel.BackColor = [System.Drawing.Color]::FromArgb(66, 39, 90)
+$form.Controls.Add($headerPanel)
 
 $titleLabel = New-Object System.Windows.Forms.Label
 $titleLabel.Text = $Text.title
-$titleLabel.Font = New-Object System.Drawing.Font('Microsoft YaHei UI', 22, [System.Drawing.FontStyle]::Bold)
-$titleLabel.ForeColor = [System.Drawing.Color]::FromArgb(92, 42, 115)
-$titleLabel.Location = New-Object System.Drawing.Point(30, 24)
+$titleLabel.Font = New-Object System.Drawing.Font('Microsoft YaHei UI', 24, [System.Drawing.FontStyle]::Bold)
+$titleLabel.ForeColor = [System.Drawing.Color]::White
+$titleLabel.Location = New-Object System.Drawing.Point(32, 20)
 $titleLabel.Size = New-Object System.Drawing.Size(420, 42)
-$form.Controls.Add($titleLabel)
+$headerPanel.Controls.Add($titleLabel)
 
 $subtitleLabel = New-Object System.Windows.Forms.Label
-$subtitleLabel.Text = $Text.subtitle
-$subtitleLabel.ForeColor = [System.Drawing.Color]::FromArgb(118, 83, 132)
-$subtitleLabel.Location = New-Object System.Drawing.Point(34, 72)
-$subtitleLabel.Size = New-Object System.Drawing.Size(680, 24)
-$form.Controls.Add($subtitleLabel)
+$subtitleLabel.Text = '一键安装、主题制作、角色套装、桌宠向导、更新售后诊断'
+$subtitleLabel.ForeColor = [System.Drawing.Color]::FromArgb(238, 224, 246)
+$subtitleLabel.Location = New-Object System.Drawing.Point(36, 64)
+$subtitleLabel.Size = New-Object System.Drawing.Size(620, 24)
+$headerPanel.Controls.Add($subtitleLabel)
+
+$brandPill = New-Object System.Windows.Forms.Label
+$brandPill.Text = '非官方第三方美化工具'
+$brandPill.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
+$brandPill.Font = New-Object System.Drawing.Font('Microsoft YaHei UI', 9, [System.Drawing.FontStyle]::Bold)
+$brandPill.ForeColor = [System.Drawing.Color]::White
+$brandPill.BackColor = [System.Drawing.Color]::FromArgb(128, 82, 154)
+$brandPill.Location = New-Object System.Drawing.Point(646, 30)
+$brandPill.Size = New-Object System.Drawing.Size(174, 36)
+$headerPanel.Controls.Add($brandPill)
 
 $statusPanel = New-Object System.Windows.Forms.Panel
-$statusPanel.Location = New-Object System.Drawing.Point(30, 112)
-$statusPanel.Size = New-Object System.Drawing.Size(700, 58)
-$statusPanel.BackColor = [System.Drawing.Color]::White
+$statusPanel.Location = New-Object System.Drawing.Point(30, 128)
+$statusPanel.Size = New-Object System.Drawing.Size(800, 62)
+$statusPanel.BackColor = [System.Drawing.Color]::FromArgb(255, 255, 255)
 $statusPanel.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
 $form.Controls.Add($statusPanel)
+
+$statusTitle = New-Object System.Windows.Forms.Label
+$statusTitle.Text = '当前状态'
+$statusTitle.Font = New-Object System.Drawing.Font('Microsoft YaHei UI', 9, [System.Drawing.FontStyle]::Bold)
+$statusTitle.ForeColor = [System.Drawing.Color]::FromArgb(92, 42, 115)
+$statusTitle.Location = New-Object System.Drawing.Point(16, 8)
+$statusTitle.Size = New-Object System.Drawing.Size(110, 20)
+$statusPanel.Controls.Add($statusTitle)
 
 $statusLabel = New-Object System.Windows.Forms.Label
 $statusLabel.Text = $Text.readyStatus
 $statusLabel.ForeColor = [System.Drawing.Color]::FromArgb(77, 37, 103)
-$statusLabel.Location = New-Object System.Drawing.Point(16, 17)
-$statusLabel.Size = New-Object System.Drawing.Size(660, 24)
+$statusLabel.Location = New-Object System.Drawing.Point(16, 30)
+$statusLabel.Size = New-Object System.Drawing.Size(760, 24)
 $statusPanel.Controls.Add($statusLabel)
 
-$buttonPanel = New-Object System.Windows.Forms.TableLayoutPanel
-$buttonPanel.Location = New-Object System.Drawing.Point(30, 194)
-$buttonPanel.Size = New-Object System.Drawing.Size(700, 280)
-$buttonPanel.ColumnCount = 3
-$buttonPanel.RowCount = 4
-$buttonPanel.BackColor = $form.BackColor
-for ($i = 0; $i -lt 3; $i++) {
-  [void]$buttonPanel.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 33.33)))
+$toolTip = New-Object System.Windows.Forms.ToolTip
+$toolTip.AutoPopDelay = 9000
+$toolTip.InitialDelay = 350
+$toolTip.ReshowDelay = 120
+
+function New-ActionGroup {
+  param(
+    [Parameter(Mandatory = $true)][string]$Title,
+    [Parameter(Mandatory = $true)][string]$Caption,
+    [Parameter(Mandatory = $true)][System.Drawing.Point]$Location
+  )
+  $panel = New-Object System.Windows.Forms.Panel
+  $panel.Location = $Location
+  $panel.Size = New-Object System.Drawing.Size(252, 334)
+  $panel.BackColor = [System.Drawing.Color]::White
+  $panel.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
+  $form.Controls.Add($panel)
+
+  $groupTitleLabel = New-Object System.Windows.Forms.Label
+  $groupTitleLabel.Text = $Title
+  $groupTitleLabel.Font = New-Object System.Drawing.Font('Microsoft YaHei UI', 12, [System.Drawing.FontStyle]::Bold)
+  $groupTitleLabel.ForeColor = [System.Drawing.Color]::FromArgb(76, 42, 102)
+  $groupTitleLabel.Location = New-Object System.Drawing.Point(16, 14)
+  $groupTitleLabel.Size = New-Object System.Drawing.Size(214, 24)
+  $panel.Controls.Add($groupTitleLabel)
+
+  $groupCaptionLabel = New-Object System.Windows.Forms.Label
+  $groupCaptionLabel.Text = $Caption
+  $groupCaptionLabel.ForeColor = [System.Drawing.Color]::FromArgb(132, 102, 145)
+  $groupCaptionLabel.Location = New-Object System.Drawing.Point(16, 42)
+  $groupCaptionLabel.Size = New-Object System.Drawing.Size(214, 38)
+  $panel.Controls.Add($groupCaptionLabel)
+
+  $layout = New-Object System.Windows.Forms.TableLayoutPanel
+  $layout.Location = New-Object System.Drawing.Point(10, 88)
+  $layout.Size = New-Object System.Drawing.Size(230, 232)
+  $layout.ColumnCount = 1
+  $layout.RowCount = 4
+  $layout.BackColor = $panel.BackColor
+  for ($i = 0; $i -lt 4; $i++) {
+    [void]$layout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Percent, 25)))
+  }
+  $panel.Controls.Add($layout)
+  return $layout
 }
-for ($i = 0; $i -lt 4; $i++) {
-  [void]$buttonPanel.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Percent, 25)))
-}
-$form.Controls.Add($buttonPanel)
+
+$quickGroup = New-ActionGroup -Title '快速开始' -Caption '首次安装、启动、验证效果都放在这里。' `
+  -Location (New-Object System.Drawing.Point(30, 216))
+$createGroup = New-ActionGroup -Title '个性创作' -Caption '让买家自己做主题、字体和桌宠。' `
+  -Location (New-Object System.Drawing.Point(304, 216))
+$supportGroup = New-ActionGroup -Title '恢复售后' -Caption '更新后修复、恢复官方外观和诊断。' `
+  -Location (New-Object System.Drawing.Point(578, 216))
 
 function New-ActionButton {
   param(
     [Parameter(Mandatory = $true)][string]$Body,
-    [Parameter(Mandatory = $true)][scriptblock]$Click
+    [Parameter(Mandatory = $true)][scriptblock]$Click,
+    [string]$Description = '',
+    [string]$Tone = 'default'
   )
   $button = New-Object System.Windows.Forms.Button
   $button.Text = $Body
   $button.Dock = [System.Windows.Forms.DockStyle]::Fill
-  $button.Margin = New-Object System.Windows.Forms.Padding(8)
+  $button.Margin = New-Object System.Windows.Forms.Padding(8, 6, 8, 6)
   $button.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
-  $button.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(222, 151, 198)
-  $button.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(255, 232, 246)
-  $button.BackColor = [System.Drawing.Color]::White
-  $button.ForeColor = [System.Drawing.Color]::FromArgb(83, 37, 110)
-  $button.Font = New-Object System.Drawing.Font('Microsoft YaHei UI', 10, [System.Drawing.FontStyle]::Bold)
+  $button.FlatAppearance.BorderSize = 1
+  $button.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
+  $button.Font = New-Object System.Drawing.Font('Microsoft YaHei UI', 9.5, [System.Drawing.FontStyle]::Bold)
+  if ($Tone -eq 'primary') {
+    $button.BackColor = [System.Drawing.Color]::FromArgb(104, 58, 140)
+    $button.ForeColor = [System.Drawing.Color]::White
+    $button.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(104, 58, 140)
+    $button.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(126, 73, 162)
+  } elseif ($Tone -eq 'danger') {
+    $button.BackColor = [System.Drawing.Color]::FromArgb(255, 250, 250)
+    $button.ForeColor = [System.Drawing.Color]::FromArgb(146, 57, 74)
+    $button.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(232, 174, 184)
+    $button.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(255, 238, 242)
+  } else {
+    $button.BackColor = [System.Drawing.Color]::FromArgb(253, 251, 255)
+    $button.ForeColor = [System.Drawing.Color]::FromArgb(83, 37, 110)
+    $button.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(216, 196, 228)
+    $button.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(246, 237, 252)
+  }
+  if ($Description) { $toolTip.SetToolTip($button, $Description) }
   $button.Add_Click({
     try {
       & $Click
@@ -1557,38 +1638,41 @@ function New-ActionButton {
 
 $script:ActionButtons = @()
 $buttonSpecs = @(
-  @{ Text = $Text.buttonInstall; Action = { Install-Skin } },
-  @{ Text = $Text.buttonStart; Action = { Start-Skin } },
-  @{ Text = $Text.buttonRestart; Action = { Restart-Start-Skin } },
-  @{ Text = $Text.buttonVerify; Action = { Verify-Skin } },
-  @{ Text = $Text.buttonImage; Action = { Invoke-GuiAction $Text.busyImage $Text.doneImage { Select-CustomImage } } },
-  @{ Text = (Get-TextValue -Name 'buttonMakeTheme' -Default '一键制作主题'); Action = { Invoke-GuiAction '正在制作主题...' '主题制作完成。' { New-OneClickTheme } } },
-  @{ Text = (Get-TextValue -Name 'buttonTheme' -Default '主题库 / 导入主题'); Action = { Invoke-GuiAction 'Applying theme...' 'Theme applied.' { Select-ThemePackage } } },
-  @{ Text = (Get-TextValue -Name 'buttonPet' -Default '桌宠制作向导'); Action = { Invoke-GuiAction '正在处理桌宠...' '桌宠操作完成。' { Show-PetMakerWizard } } },
-  @{ Text = $Text.buttonDefaultImage; Action = { Invoke-GuiAction $Text.busyDefaultImage $Text.doneDefaultImage { Restore-DefaultImage } } },
-  @{ Text = $Text.buttonRestore; Action = { Restore-Official } },
-  @{ Text = $Text.buttonUninstall; Action = { Uninstall-Skin } },
-  @{ Text = '日志 / 售后诊断'; Action = { Invoke-GuiAction '正在生成售后诊断包...' '售后诊断包已生成。' { Open-Logs } } }
+  @{ Group = $quickGroup; Text = '安装 / 修复'; Tone = 'primary'; Description = '首次使用、Codex 更新后、皮肤失效后点这里。'; Action = { Install-Skin } },
+  @{ Group = $quickGroup; Text = '启动皮肤版 Codex'; Description = '手动打开已经安装好的皮肤版 Codex。'; Action = { Start-Skin } },
+  @{ Group = $quickGroup; Text = '重启并启动'; Description = 'Codex 已打开但皮肤没有生效时使用。'; Action = { Restart-Start-Skin } },
+  @{ Group = $quickGroup; Text = '验证并截图'; Description = '生成效果截图，方便确认主题是否生效。'; Action = { Verify-Skin } },
+
+  @{ Group = $createGroup; Text = '换自己的图片'; Description = '选择一张本地图片，自动套成全窗口主题。'; Action = { Invoke-GuiAction $Text.busyImage $Text.doneImage { Select-CustomImage } } },
+  @{ Group = $createGroup; Text = '一键制作主题'; Tone = 'primary'; Description = '选择图片、配色、字体、遮罩，自动生成可导入主题。'; Action = { Invoke-GuiAction '正在制作主题...' '主题制作完成。' { New-OneClickTheme } } },
+  @{ Group = $createGroup; Text = '主题库 / 导入主题'; Description = '选择本地主题库或卖家发来的主题文件夹。'; Action = { Invoke-GuiAction 'Applying theme...' 'Theme applied.' { Select-ThemePackage } } },
+  @{ Group = $createGroup; Text = '桌宠制作向导'; Description = '复制 AI 桌宠提示词、打开 Pets、安装在线桌宠或导入本地桌宠。'; Action = { Invoke-GuiAction '正在处理桌宠...' '桌宠操作完成。' { Show-PetMakerWizard } } },
+
+  @{ Group = $supportGroup; Text = '恢复默认主题'; Description = '恢复包内默认主题并刷新皮肤。'; Action = { Invoke-GuiAction $Text.busyDefaultImage $Text.doneDefaultImage { Restore-DefaultImage } } },
+  @{ Group = $supportGroup; Text = '恢复官方外观'; Description = '撤销皮肤效果，回到 Codex 原始外观。'; Action = { Restore-Official } },
+  @{ Group = $supportGroup; Text = '卸载快捷方式'; Tone = 'danger'; Description = '删除 Dream Skin 创建的快捷方式，同时恢复官方外观。'; Action = { Uninstall-Skin } },
+  @{ Group = $supportGroup; Text = '日志 / 售后诊断'; Tone = 'primary'; Description = '生成 support zip，Codex 更新或故障时发给卖家排查。'; Action = { Invoke-GuiAction '正在生成售后诊断包...' '售后诊断包已生成。' { Open-Logs } } }
 )
 
 for ($index = 0; $index -lt $buttonSpecs.Count; $index++) {
-  $button = New-ActionButton -Body $buttonSpecs[$index].Text -Click $buttonSpecs[$index].Action
+  $button = New-ActionButton -Body $buttonSpecs[$index].Text -Click $buttonSpecs[$index].Action `
+    -Description $buttonSpecs[$index].Description -Tone $buttonSpecs[$index].Tone
   $script:ActionButtons += $button
-  $buttonPanel.Controls.Add($button, $index % 3, [math]::Floor($index / 3))
+  $buttonSpecs[$index].Group.Controls.Add($button, 0, $buttonSpecs[$index].Group.Controls.Count)
 }
 
 $noteLabel = New-Object System.Windows.Forms.Label
 $noteLabel.Text = $Text.safetyNote
 $noteLabel.ForeColor = [System.Drawing.Color]::FromArgb(120, 85, 125)
-$noteLabel.Location = New-Object System.Drawing.Point(34, 498)
-$noteLabel.Size = New-Object System.Drawing.Size(690, 34)
+$noteLabel.Location = New-Object System.Drawing.Point(34, 570)
+$noteLabel.Size = New-Object System.Drawing.Size(792, 34)
 $form.Controls.Add($noteLabel)
 
 $fallbackLabel = New-Object System.Windows.Forms.Label
 $fallbackLabel.Text = $Text.fallbackNote
 $fallbackLabel.ForeColor = [System.Drawing.Color]::FromArgb(150, 110, 150)
-$fallbackLabel.Location = New-Object System.Drawing.Point(34, 532)
-$fallbackLabel.Size = New-Object System.Drawing.Size(690, 24)
+$fallbackLabel.Location = New-Object System.Drawing.Point(34, 608)
+$fallbackLabel.Size = New-Object System.Drawing.Size(792, 24)
 $form.Controls.Add($fallbackLabel)
 
 [void]$form.ShowDialog()
