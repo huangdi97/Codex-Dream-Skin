@@ -70,6 +70,25 @@ function Write-GuiCrashLog {
   } catch {}
 }
 
+function Write-DreamSkinNoBomText {
+  param(
+    [Parameter(Mandatory = $true)][string]$Path,
+    [Parameter(Mandatory = $true)][string]$Text
+  )
+  $encoding = New-Object System.Text.UTF8Encoding -ArgumentList $false
+  [System.IO.File]::WriteAllText($Path, $Text + [Environment]::NewLine, $encoding)
+}
+
+function Copy-DreamSkinTextToClipboard {
+  param([Parameter(Mandatory = $true)][string]$Text)
+  try {
+    [System.Windows.Forms.Clipboard]::SetText($Text)
+    return $true
+  } catch {
+    return $false
+  }
+}
+
 function Confirm-Action {
   param([Parameter(Mandatory = $true)][string]$Body)
   $result = [System.Windows.Forms.MessageBox]::Show(
@@ -1104,6 +1123,173 @@ function New-RoleSuitePackage {
   }
 }
 
+function New-SellerOrderKit {
+  $dialog = New-Object System.Windows.Forms.Form
+  $dialog.Text = '生成接单资料卡'
+  $dialog.StartPosition = 'CenterParent'
+  $dialog.ClientSize = New-Object System.Drawing.Size(520, 470)
+  $dialog.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
+  $dialog.MaximizeBox = $false
+  $dialog.MinimizeBox = $false
+  $dialog.Font = New-Object System.Drawing.Font('Microsoft YaHei UI', 9)
+
+  $labels = @('客户称呼', '套装名称', '角色 / 风格', '主题需求', '桌宠需求', '售后天数', '备注')
+  $boxes = @{}
+  for ($i = 0; $i -lt $labels.Count; $i++) {
+    $label = New-Object System.Windows.Forms.Label
+    $label.Text = $labels[$i]
+    $label.Location = New-Object System.Drawing.Point(20, (22 + $i * 48))
+    $label.Size = New-Object System.Drawing.Size(92, 24)
+    $dialog.Controls.Add($label)
+
+    if ($labels[$i] -eq '备注') {
+      $box = New-Object System.Windows.Forms.TextBox
+      $box.Multiline = $true
+      $box.ScrollBars = [System.Windows.Forms.ScrollBars]::Vertical
+      $box.Location = New-Object System.Drawing.Point(126, (20 + $i * 48))
+      $box.Size = New-Object System.Drawing.Size(360, 58)
+    } elseif ($labels[$i] -eq '售后天数') {
+      $box = New-Object System.Windows.Forms.ComboBox
+      $box.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDownList
+      foreach ($option in @('7 天', '30 天', '90 天', '仅交付一次')) { [void]$box.Items.Add($option) }
+      $box.SelectedIndex = 1
+      $box.Location = New-Object System.Drawing.Point(126, (20 + $i * 48))
+      $box.Size = New-Object System.Drawing.Size(360, 24)
+    } else {
+      $box = New-Object System.Windows.Forms.TextBox
+      $box.Location = New-Object System.Drawing.Point(126, (20 + $i * 48))
+      $box.Size = New-Object System.Drawing.Size(360, 24)
+    }
+    $boxes[$labels[$i]] = $box
+    $dialog.Controls.Add($box)
+  }
+  $boxes['客户称呼'].Text = '买家'
+  $boxes['套装名称'].Text = 'Codex 专属角色套装'
+  $boxes['角色 / 风格'].Text = 'Q版原创角色 / 指定氛围风格'
+  $boxes['主题需求'].Text = '背景、控件配色、字体、首页/任务页遮罩'
+  $boxes['桌宠需求'].Text = '6 个 Codex 状态动作，官方 Pets 可导入'
+
+  $hint = New-Object System.Windows.Forms.Label
+  $hint.Text = '会生成：需求表、交付清单、闲鱼回复话术和订单资料卡。'
+  $hint.ForeColor = [System.Drawing.Color]::FromArgb(126, 90, 142)
+  $hint.Location = New-Object System.Drawing.Point(20, 386)
+  $hint.Size = New-Object System.Drawing.Size(466, 24)
+  $dialog.Controls.Add($hint)
+
+  $ok = New-Object System.Windows.Forms.Button
+  $ok.Text = '生成'
+  $ok.Location = New-Object System.Drawing.Point(322, 426)
+  $ok.Size = New-Object System.Drawing.Size(78, 30)
+  $dialog.AcceptButton = $ok
+  $dialog.Controls.Add($ok)
+
+  $cancel = New-Object System.Windows.Forms.Button
+  $cancel.Text = '取消'
+  $cancel.Location = New-Object System.Drawing.Point(408, 426)
+  $cancel.Size = New-Object System.Drawing.Size(78, 30)
+  $dialog.CancelButton = $cancel
+  $dialog.Controls.Add($cancel)
+
+  $script:SellerOrderKitValue = $null
+  $ok.Add_Click({
+    $suiteName = $boxes['套装名称'].Text.Trim()
+    if ([string]::IsNullOrWhiteSpace($suiteName)) {
+      [void][System.Windows.Forms.MessageBox]::Show('套装名称不能为空。', '生成接单资料卡')
+      return
+    }
+    $script:SellerOrderKitValue = [pscustomobject]@{
+      Customer = $boxes['客户称呼'].Text.Trim()
+      SuiteName = $suiteName
+      Style = $boxes['角色 / 风格'].Text.Trim()
+      ThemeNeed = $boxes['主题需求'].Text.Trim()
+      PetNeed = $boxes['桌宠需求'].Text.Trim()
+      Support = [string]$boxes['售后天数'].SelectedItem
+      Notes = $boxes['备注'].Text.Trim()
+    }
+    $dialog.Close()
+  })
+  $cancel.Add_Click({ $dialog.Close() })
+
+  [void]$dialog.ShowDialog($form)
+  $dialog.Dispose()
+  if (-not $script:SellerOrderKitValue) { return $Text.cancelled }
+
+  $order = $script:SellerOrderKitValue
+  $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+  $baseId = ConvertTo-SafeThemeId -Name $order.SuiteName
+  $orderDir = Join-Path (Join-Path $OutputsRoot 'seller-orders') "$baseId-$stamp"
+  New-Item -ItemType Directory -Force -Path $orderDir | Out-Null
+
+  $questionnaire = @(
+    "Codex Dream Skin 定制需求表 - $($order.SuiteName)"
+    ''
+    "客户：$($order.Customer)"
+    "角色 / 风格：$($order.Style)"
+    "主题需求：$($order.ThemeNeed)"
+    "桌宠需求：$($order.PetNeed)"
+    "售后范围：$($order.Support)"
+    "备注：$($order.Notes)"
+    ''
+    '需要客户补充：'
+    '1. 背景图或参考图。'
+    '2. 主色调、字体偏好、是否要首页/任务页遮罩。'
+    '3. 如果要桌宠，确认角色名字、性格和动作偏好。'
+    '4. Windows 版本、Codex 是否能正常打开登录。'
+  ) -join [Environment]::NewLine
+  Write-DreamSkinNoBomText -Path (Join-Path $orderDir 'buyer-questionnaire.txt') -Text $questionnaire
+
+  $delivery = @(
+    "交付清单 - $($order.SuiteName)"
+    ''
+    '[ ] theme.json 已生成并通过导入测试'
+    '[ ] background.jpg 已压缩且显示正常'
+    '[ ] 字体文件已确认格式和大小（如包含）'
+    '[ ] pet\pet.json 已生成（如包含桌宠）'
+    '[ ] pet\spritesheet.png/webp 为 1536 x 1872 且小于 20 MiB'
+    '[ ] 已点击“桌宠体检”'
+    '[ ] 已点击“验证并截图”'
+    '[ ] 已生成角色套装 zip'
+    '[ ] 已告知买家：Codex 更新后点击“安装 / 修复”'
+    '[ ] 已告知买家：失败时发 support zip，不要发账号密码'
+  ) -join [Environment]::NewLine
+  Write-DreamSkinNoBomText -Path (Join-Path $orderDir 'delivery-checklist.txt') -Text $delivery
+
+  $reply = @(
+    '可以做，交付的是 Codex 第三方主题 / 桌宠角色套装，不是官方 Codex 本体。'
+    ('你这单我按“' + $order.SuiteName + '”来做：' + $order.Style + '。')
+    ''
+    '我需要你提供：'
+    '1. 背景图或参考图；'
+    '2. 想要的主色、字体和遮罩效果；'
+    '3. 如果要桌宠，补充角色名字、性格和想要的动作；'
+    '4. 确认 Codex 桌面端能正常打开。'
+    ''
+    ('交付后你完整解压，一键导入即可。Codex 更新后如果皮肤失效，点“安装 / 修复”；仍失败就点“日志 / 售后诊断”，把生成的 zip 发我排查。售后范围：' + $order.Support + '。')
+    ''
+    '说明：不提供账号，不索要密码/API Key，不修改官方安装包。'
+  ) -join [Environment]::NewLine
+  Write-DreamSkinNoBomText -Path (Join-Path $orderDir 'xianyu-reply.txt') -Text $reply
+
+  $card = @(
+    "订单资料卡：$($order.SuiteName)"
+    ''
+    "客户：$($order.Customer)"
+    "创建时间：$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+    "输出目录：$orderDir"
+    ''
+    '建议下一步：'
+    '1. 用“角色套装打包器”生成主题包。'
+    '2. 如果有桌宠，用“桌宠体检”先检查。'
+    '3. 交付前运行“验证并截图”。'
+    '4. 把 xianyu-reply.txt 里的话术发给买家确认需求。'
+  ) -join [Environment]::NewLine
+  Write-DreamSkinNoBomText -Path (Join-Path $orderDir 'order-card.txt') -Text $card
+
+  $null = Copy-DreamSkinTextToClipboard -Text $reply
+  Start-Process explorer.exe $orderDir
+  return "接单资料卡已生成：$orderDir`r`n`r`n闲鱼回复话术已复制到剪贴板。"
+}
+
 function Select-ThemePackage {
   $paths = Initialize-OneClickThemeStore
   $packages = @(Get-DreamSkinSavedThemes -StateRoot $paths.Root -SkipImageMetadata)
@@ -1682,6 +1868,155 @@ function Open-Logs {
   return "售后诊断包已生成：$($support.Zip)`r`n`r`n把这个 zip 发给卖家即可排查。"
 }
 
+function New-DreamSkinCompatibilityReport {
+  New-Item -ItemType Directory -Force -Path $OutputsRoot | Out-Null
+  $summary = Get-DreamSkinDiagnosticSummary
+  $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+  $path = Join-Path $OutputsRoot "compatibility-$stamp.txt"
+
+  $codexVersion = if ($summary.codexInstalls.Count -gt 0) { $summary.codexInstalls[0].version } else { '未检测到' }
+  $nodeStatus = if ($summary.node) { "$($summary.node.version) - $($summary.node.path)" } else { "未检测到：$($summary.nodeError)" }
+  $themeStatus = if ($summary.activeTheme) {
+    "$($summary.activeTheme.name) / taskMode=$($summary.activeTheme.taskMode) / taskChrome=$($summary.activeTheme.taskChrome)"
+  } else {
+    "未读取到当前主题：$($summary.activeThemeError)"
+  }
+  $cdpStatus = if ($summary.cdp -and $summary.cdp.available) { "可连接，目标数 $($summary.cdp.targetCount)" } else { "未验证：$($summary.cdpError)" }
+
+  $suggestions = New-Object System.Collections.Generic.List[string]
+  if ($summary.codexInstalls.Count -eq 0) { $suggestions.Add('未检测到 Codex 桌面端，请先安装并登录官方 Codex。') }
+  if (-not $summary.node) { $suggestions.Add('未检测到 Node.js，安装 / 修复可能失败，请安装 Node.js 22 或更新版本。') }
+  if (-not $summary.activeTheme) { $suggestions.Add('当前主题不可读，建议先点击“恢复默认主题”，再点击“安装 / 修复”。') }
+  if (-not ($summary.cdp -and $summary.cdp.available)) { $suggestions.Add('未连接到皮肤版 Codex 调试端口。若 Codex 更新后皮肤失效，请点击“安装 / 修复”重新注入。') }
+  if ($suggestions.Count -eq 0) { $suggestions.Add('基础状态正常。Codex 更新后如皮肤被覆盖，直接点击“安装 / 修复”即可。') }
+
+  $report = @(
+    'Codex Dream Skin 更新适配检查'
+    ''
+    "生成时间：$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+    "工具目录：$PackageRoot"
+    "输出目录：$OutputsRoot"
+    "Codex 版本：$codexVersion"
+    "Codex 进程数：$($summary.codexProcessCount)"
+    "Node：$nodeStatus"
+    "当前主题：$themeStatus"
+    "本地主题数：$($summary.savedThemeCount)"
+    "本地桌宠数：$($summary.petCount)"
+    "CDP 端口 ${Port}：$cdpStatus"
+    ''
+    '建议动作：'
+  ) + @($suggestions | ForEach-Object { "- $_" }) + @(
+    ''
+    '给买家的标准话术：'
+    'Codex 更新后皮肤可能被覆盖，重新打开本工具点击“安装 / 修复”即可；如果仍失败，请点击“日志 / 售后诊断”，把生成的 support zip 发给卖家排查。'
+  )
+
+  Write-DreamSkinNoBomText -Path $path -Text ($report -join [Environment]::NewLine)
+  $null = Copy-DreamSkinTextToClipboard -Text ($report -join [Environment]::NewLine)
+  return $path
+}
+
+function Show-UpdateCompatibilityCenter {
+  $reportPath = New-DreamSkinCompatibilityReport
+  Start-Process explorer.exe $OutputsRoot
+  return ('更新适配检查已生成：' + $reportPath + "`r`n`r`n" + '检查结果已复制到剪贴板。Codex 更新后优先点击“安装 / 修复”，仍失败再生成售后诊断包。')
+}
+
+function Open-DreamSkinSellerOutputs {
+  New-Item -ItemType Directory -Force -Path $OutputsRoot | Out-Null
+  foreach ($name in @('role-suites', 'seller-orders', 'themes')) {
+    New-Item -ItemType Directory -Force -Path (Join-Path $OutputsRoot $name) | Out-Null
+  }
+  Start-Process explorer.exe $OutputsRoot
+  return "已打开交付输出目录：$OutputsRoot"
+}
+
+function Open-DreamSkinSellerSop {
+  $path = Join-Path $PackageRoot 'docs\seller-sop.txt'
+  if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "找不到 SOP：$path" }
+  Start-Process notepad.exe $path
+  return "已打开卖家 SOP：$path"
+}
+
+function Show-SellerWorkbench {
+  $dialog = New-Object System.Windows.Forms.Form
+  $dialog.Text = '卖家工作台'
+  $dialog.StartPosition = 'CenterParent'
+  $dialog.ClientSize = New-Object System.Drawing.Size(560, 386)
+  $dialog.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
+  $dialog.MaximizeBox = $false
+  $dialog.MinimizeBox = $false
+  $dialog.Font = New-Object System.Drawing.Font('Microsoft YaHei UI', 9)
+  $dialog.BackColor = [System.Drawing.Color]::FromArgb(250, 247, 252)
+
+  $title = New-Object System.Windows.Forms.Label
+  $title.Text = '接单、制作、交付、更新售后'
+  $title.Font = New-Object System.Drawing.Font('Microsoft YaHei UI', 15, [System.Drawing.FontStyle]::Bold)
+  $title.ForeColor = [System.Drawing.Color]::FromArgb(76, 42, 102)
+  $title.Location = New-Object System.Drawing.Point(24, 20)
+  $title.Size = New-Object System.Drawing.Size(500, 32)
+  $dialog.Controls.Add($title)
+
+  $caption = New-Object System.Windows.Forms.Label
+  $caption.Text = '买家主界面保持简单；这些是卖家接定制单、打包角色套装和处理更新后的专用工具。'
+  $caption.ForeColor = [System.Drawing.Color]::FromArgb(126, 90, 142)
+  $caption.Location = New-Object System.Drawing.Point(26, 58)
+  $caption.Size = New-Object System.Drawing.Size(500, 36)
+  $dialog.Controls.Add($caption)
+
+  $status = New-Object System.Windows.Forms.Label
+  $status.Text = '请选择一个卖家动作。'
+  $status.ForeColor = [System.Drawing.Color]::FromArgb(77, 37, 103)
+  $status.Location = New-Object System.Drawing.Point(28, 316)
+  $status.Size = New-Object System.Drawing.Size(500, 42)
+  $dialog.Controls.Add($status)
+
+  $buttonSpecs = @(
+    @{ Text = '生成接单资料卡'; X = 28; Y = 112; Action = { New-SellerOrderKit } },
+    @{ Text = '角色套装打包器'; X = 286; Y = 112; Action = { New-RoleSuitePackage } },
+    @{ Text = '桌宠体检'; X = 28; Y = 172; Action = { Test-DreamSkinPetPackageInteractive } },
+    @{ Text = '更新适配检查'; X = 286; Y = 172; Action = { New-DreamSkinCompatibilityReport } },
+    @{ Text = '打开交付输出'; X = 28; Y = 232; Action = { Open-DreamSkinSellerOutputs } },
+    @{ Text = '查看卖家 SOP'; X = 286; Y = 232; Action = { Open-DreamSkinSellerSop } }
+  )
+
+  foreach ($spec in $buttonSpecs) {
+    $button = New-Object System.Windows.Forms.Button
+    $button.Text = $spec.Text
+    $button.Location = New-Object System.Drawing.Point($spec.X, $spec.Y)
+    $button.Size = New-Object System.Drawing.Size(226, 42)
+    $button.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+    $button.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(216, 196, 228)
+    $button.BackColor = [System.Drawing.Color]::White
+    $button.ForeColor = [System.Drawing.Color]::FromArgb(83, 37, 110)
+    $button.Font = New-Object System.Drawing.Font('Microsoft YaHei UI', 9.5, [System.Drawing.FontStyle]::Bold)
+    $clickAction = $spec.Action
+    $button.Add_Click({
+      try {
+        $result = & $clickAction
+        if ($result) { $status.Text = "$result" }
+      } catch {
+        Write-GuiCrashLog $_
+        $status.Text = $_.Exception.Message
+        [void][System.Windows.Forms.MessageBox]::Show($_.Exception.Message, '卖家工作台', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+      }
+    }.GetNewClosure())
+    $dialog.Controls.Add($button)
+  }
+
+  $close = New-Object System.Windows.Forms.Button
+  $close.Text = '关闭'
+  $close.Location = New-Object System.Drawing.Point(448, 348)
+  $close.Size = New-Object System.Drawing.Size(80, 28)
+  $close.Add_Click({ $dialog.Close() })
+  $dialog.CancelButton = $close
+  $dialog.Controls.Add($close)
+
+  [void]$dialog.ShowDialog($form)
+  $dialog.Dispose()
+  return '卖家工作台已关闭。'
+}
+
 Assert-PackageReady
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
@@ -1708,7 +2043,7 @@ $titleLabel.Size = New-Object System.Drawing.Size(420, 42)
 $headerPanel.Controls.Add($titleLabel)
 
 $subtitleLabel = New-Object System.Windows.Forms.Label
-$subtitleLabel.Text = '一键安装、主题制作、角色套装、桌宠向导、更新售后诊断'
+$subtitleLabel.Text = '一键安装、主题制作、桌宠向导、卖家工作台、更新适配和售后诊断'
 $subtitleLabel.ForeColor = [System.Drawing.Color]::FromArgb(238, 224, 246)
 $subtitleLabel.Location = New-Object System.Drawing.Point(36, 64)
 $subtitleLabel.Size = New-Object System.Drawing.Size(620, 24)
@@ -1796,7 +2131,7 @@ $quickGroup = New-ActionGroup -Title '快速开始' -Caption '首次安装、启
   -Location (New-Object System.Drawing.Point(30, 216))
 $createGroup = New-ActionGroup -Title '个性创作' -Caption '让买家自己做主题、字体和桌宠。' `
   -Location (New-Object System.Drawing.Point(304, 216))
-$supportGroup = New-ActionGroup -Title '恢复售后' -Caption '更新后修复、恢复官方外观和诊断。' `
+$supportGroup = New-ActionGroup -Title '恢复售后' -Caption 'Codex 更新后检查、修复、恢复和诊断。' `
   -Location (New-Object System.Drawing.Point(578, 216))
 
 function New-ActionButton {
@@ -1854,9 +2189,10 @@ $buttonSpecs = @(
   @{ Group = $createGroup; Text = '一键制作主题'; Tone = 'primary'; Description = '选择图片、配色、字体、遮罩，自动生成可导入主题。'; Action = { Invoke-GuiAction '正在制作主题...' '主题制作完成。' { New-OneClickTheme } } },
   @{ Group = $createGroup; Text = '主题库 / 导入主题'; Description = '选择本地主题库或卖家发来的主题文件夹。'; Action = { Invoke-GuiAction 'Applying theme...' 'Theme applied.' { Select-ThemePackage } } },
   @{ Group = $createGroup; Text = '桌宠制作向导'; Description = '复制 AI 桌宠提示词、打开 Pets、安装在线桌宠或导入本地桌宠。'; Action = { Invoke-GuiAction '正在处理桌宠...' '桌宠操作完成。' { Show-PetMakerWizard } } },
-  @{ Group = $createGroup; Text = '角色套装打包器'; Tone = 'primary'; Description = '卖家用：把主题、字体和桌宠打成买家可一键导入的角色套装。'; Action = { Invoke-GuiAction '正在打包角色套装...' '角色套装打包完成。' { New-RoleSuitePackage } } },
+  @{ Group = $createGroup; Text = '卖家工作台'; Tone = 'primary'; Description = '卖家用：接单资料卡、角色套装打包、桌宠体检、交付输出和 SOP。'; Action = { Invoke-GuiAction '正在打开卖家工作台...' '卖家工作台已关闭。' { Show-SellerWorkbench } } },
 
   @{ Group = $supportGroup; Text = '恢复默认主题'; Description = '恢复包内默认主题并刷新皮肤。'; Action = { Invoke-GuiAction $Text.busyDefaultImage $Text.doneDefaultImage { Restore-DefaultImage } } },
+  @{ Group = $supportGroup; Text = '更新适配中心'; Tone = 'primary'; Description = 'Codex 更新后检查版本、主题、Node、端口状态，并生成修复建议。'; Action = { Invoke-GuiAction '正在检查更新适配状态...' '更新适配检查完成。' { Show-UpdateCompatibilityCenter } } },
   @{ Group = $supportGroup; Text = '恢复官方外观'; Description = '撤销皮肤效果，回到 Codex 原始外观。'; Action = { Restore-Official } },
   @{ Group = $supportGroup; Text = '卸载快捷方式'; Tone = 'danger'; Description = '删除 Dream Skin 创建的快捷方式，同时恢复官方外观。'; Action = { Uninstall-Skin } },
   @{ Group = $supportGroup; Text = '日志 / 售后诊断'; Tone = 'primary'; Description = '生成 support zip，Codex 更新或故障时发给卖家排查。'; Action = { Invoke-GuiAction '正在生成售后诊断包...' '售后诊断包已生成。' { Open-Logs } } }
